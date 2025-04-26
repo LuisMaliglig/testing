@@ -4,6 +4,7 @@
   "private": true,
   "dependencies": {
     "@aws-sdk/client-location": "^3.782.0",
+    "@mapbox/mapbox-sdk": "^0.16.1",
     "@testing-library/dom": "^10.4.0",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.3.0",
@@ -15,7 +16,8 @@
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-map-gl": "^5.2.11",
-    "react-scripts": "5.0.1",
+    "react-router-dom": "^7.5.1",
+    "react-scripts": "^5.0.1",
     "web-vitals": "^2.1.4"
   },
   "scripts": {
