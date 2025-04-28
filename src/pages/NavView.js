@@ -1,221 +1,205 @@
 import React, { useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
-import { LocationClient, SearchPlaceIndexForTextCommand } from "@aws-sdk/client-location";
-import { awsConfig } from "../config/config"; // Ensure AWS config is available
-import logo from '../assets/logo.png'; // Ensure logo is imported
+import { awsConfig } from "../config/config";
+import transitRoute from "../data/transit-lines.json";
+import { useNavigate } from "react-router-dom";
+import AWS from 'aws-sdk';
+import logo from "../assets/logo.png"; // Make sure to import your logo
 
 const NavView = () => {
   const mapContainerRef = useRef(null);
-  const [isMapVisible, setIsMapVisible] = useState(true);
-  const [mapLoaded, setMapLoaded] = useState(false);
-  const [origin, setOrigin] = useState(null);
-  const [destination, setDestination] = useState(null);
-  const [suggestedLocations, setSuggestedLocations] = useState([]);
-  const [map, setMap] = useState(null);
+  const mapRef = useRef(null);
+  const [origin, setOrigin] = useState("");
+  const [destination, setDestination] = useState("");
+  const [suggestedRoutes, setSuggestedRoutes] = useState([]);
   const navigate = useNavigate();
 
-  useEffect(() => {
-    if (!isMapVisible) return;
+  // Configure AWS SDK
+  AWS.config.update({
+    region: awsConfig.region,
+    accessKeyId: awsConfig.accessKeyId,
+    secretAccessKey: awsConfig.secretAccessKey,
+  });
 
-    const mapInstance = new maplibregl.Map({
+  const routeCalculator = new AWS.Location();
+
+  useEffect(() => {
+    const map = new maplibregl.Map({
       container: mapContainerRef.current,
       style: `https://maps.geo.${awsConfig.region}.amazonaws.com/maps/v0/maps/${awsConfig.mapName}/style-descriptor?key=${awsConfig.apiKey}`,
-      center: [121.03570371941494, 14.49812611353759], // Default to Manila
+      center: [121.0357, 14.4981],
       zoom: 11,
     });
 
-    setMap(mapInstance);
+    mapRef.current = map;
 
-    mapInstance.on("load", () => {
-      setMapLoaded(true);
+    map.on("load", () => {
+      map.addSource("transit-route", {
+        type: "geojson",
+        data: transitRoute,
+      });
 
-      // Add the central marker
-      const marker = new maplibregl.Marker({ color: "#ff0000" })
-        .setLngLat([121.03570371941494, 14.49812611353759]) // Centered on Manila
-        .addTo(mapInstance);
-
-      // Add compass and ruler controls
-      mapInstance.addControl(new maplibregl.NavigationControl(), "bottom-right");
+      // Add your route layers here if needed
     });
 
-    return () => mapInstance.remove();
-  }, [isMapVisible]);
+    return () => map.remove();
+  }, []);
 
-  const handleLocationSearch = async (query, type) => {
-    if (!query) {
-      setSuggestedLocations([]);
+  const handleRouteSuggestion = async () => {
+    if (!origin || !destination) {
+      setSuggestedRoutes(["Please provide valid origin and destination coordinates."]);
       return;
     }
 
-    const client = new LocationClient({
-      region: awsConfig.region,
-      credentials: awsConfig.credentials,
-    });
+    const originCoords = origin.split(",").map(Number);
+    const destinationCoords = destination.split(",").map(Number);
 
-    const command = new SearchPlaceIndexForTextCommand({
-      IndexName: awsConfig.placeIndex, // AWS Place Index
-      Text: query,
-    });
+    const params = {
+      CalculatorName: awsConfig.routeCalculatorName,
+      DeparturePosition: [originCoords[1], originCoords[0]], // [longitude, latitude]
+      DestinationPosition: [destinationCoords[1], destinationCoords[0]],
+    };
 
     try {
-      const response = await client.send(command);
-      const locations = response.Results.map(result => ({
-        id: result.Place.Geometry.Point.join(", "),
-        name: result.Place.Label,
-      }));
-
-      if (type === "origin") {
-        setOrigin(locations[0]);
-      } else {
-        setDestination(locations[0]);
-      }
-
-      setSuggestedLocations(locations);
+      const data = await routeCalculator.calculateRoute(params).promise();
+      const routes = data.Legs.map((leg, index) => {
+        return `Route ${index + 1}: ${(leg.Distance).toFixed(2)} km, ${(leg.DurationSeconds / 60).toFixed(1)} mins`;
+      });
+      setSuggestedRoutes(routes);
     } catch (error) {
-      console.error("Error searching for locations:", error);
+      console.error("Error calculating route:", error);
+      setSuggestedRoutes(["Error calculating route. Please try again."]);
     }
-  };
-
-  const handleSetOrigin = (location) => {
-    setOrigin(location);
-    map.flyTo({ center: location.id.split(", ").map(Number), zoom: 12 });
-  };
-
-  const handleSetDestination = (location) => {
-    setDestination(location);
-    map.flyTo({ center: location.id.split(", ").map(Number), zoom: 12 });
   };
 
   return (
     <div style={{ position: "relative", height: "100vh" }}>
-      {/* Sidebar */}
-      <div
-        style={{
-          position: "absolute",
-          top: 0,
-          left: 0,
-          height: "100%",
-          width: "300px",
-          backgroundColor: "rgba(0, 0, 0, 0.4)",
-          color: "white",
-          padding: "16px",
-          zIndex: 10,
-        }}
-      >
-        {/* Top-left logo and Map View button */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
-          {/* Home button (Logo) */}
-          <img
-            src={logo}
-            alt="Logo"
-            style={{ width: "40px", height: "40px", cursor: "pointer" }}
-            onClick={() => navigate("/")}
-          />
-          
-          {/* Map View button */}
-          <button
-            onClick={() => navigate("/map-view")}
-            style={{
-              padding: "10px 16px",
-              backgroundColor: "#1e40af",
-              color: "#fff",
-              border: "none",
-              borderRadius: "6px",
-              cursor: "pointer",
-            }}
-          >
-            Map View
-          </button>
-        </div>
-
-        <h2 style={{ marginBottom: "16px" }}>Navigation</h2>
-
-        {/* Origin */}
-        <div style={{ marginBottom: "16px" }}>
-          <input
-            type="text"
-            placeholder="Search for origin..."
-            onChange={(e) => handleLocationSearch(e.target.value, "origin")}
-            style={{
-              width: "90%",
-              padding: "10px 16px",
-              marginBottom: "8px",
-              borderRadius: "15px", // Rounded corners for input
-              border: "1px solid #1e40af",
-              backgroundColor: "#fff",
-              color: "#333",
-            }}
-          />
-          {origin && <div><strong>Origin:</strong> {origin.name}</div>}
-        </div>
-
-        {/* Destination */}
-        <div style={{ marginBottom: "16px" }}>
-          <input
-            type="text"
-            placeholder="Search for destination..."
-            onChange={(e) => handleLocationSearch(e.target.value, "destination")}
-            style={{
-              width: "90%",
-              padding: "10px 16px",
-              marginBottom: "8px",
-              borderRadius: "15px", // Rounded corners for input
-              border: "1px solid #1e40af",
-              backgroundColor: "#fff",
-              color: "#333",
-            }}
-          />
-          {destination && <div><strong>Destination:</strong> {destination.name}</div>}
-        </div>
-
-        {/* Suggested Locations */}
-        <div>
-          <h3>Suggested Locations</h3>
-          <ul style={{ paddingLeft: "0", listStyle: "none" }}>
-            {suggestedLocations.map((location, index) => (
-              <li key={index} style={{ marginBottom: "8px" }}>
-                <button
-                  onClick={() => handleSetOrigin(location)}
-                  style={{
-                    width: "100%",
-                    padding: "10px",
-                    backgroundColor: "#1e40af",
-                    color: "#fff",
-                    border: "none",
-                    borderRadius: "8px", // Rounded corners for buttons
-                    cursor: "pointer",
-                    marginBottom: "4px",
-                  }}
-                >
-                  Set as Origin: {location.name}
-                </button>
-                <button
-                  onClick={() => handleSetDestination(location)}
-                  style={{
-                    width: "100%",
-                    padding: "10px",
-                    backgroundColor: "#1e40af",
-                    color: "#fff",
-                    border: "none",
-                    borderRadius: "8px", // Rounded corners for buttons
-                    cursor: "pointer",
-                  }}
-                >
-                  Set as Destination: {location.name}
-                </button>
-              </li>
-            ))}
-          </ul>
-        </div>
-      </div>
-
       {/* Fullscreen map container */}
       <div
         ref={mapContainerRef}
         style={{ width: "100%", height: "100%", position: "absolute", top: 0, left: 0 }}
       />
+
+      {/* Main Content Area */}
+      <div style={{
+        position: "absolute",
+        top: 0,
+        left: 0,
+        width: "100%",
+        height: "100%",
+        backdropFilter: "blur(4px)",
+        backgroundColor: "rgba(0, 0, 0, 0.2)",
+        zIndex: 10,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center"
+      }}>
+        <div style={{
+          position: "relative",
+          textAlign: "center",
+          color: "white",
+          backgroundColor: "rgba(0, 0, 0, 0.4)",
+          padding: "32px",
+          borderRadius: "15px",
+          minWidth: "360px",
+          maxWidth: "90%",
+        }}>
+          {/* Logo and Map View button inside the card */}
+          <div style={{
+            position: "absolute",
+            top: "16px",
+            right: "16px",
+            display: "flex",
+            alignItems: "space-between",
+            gap: "12px",
+          }}>
+            <img
+              src={logo}
+              alt="Logo"
+              style={{ width: "40px", height: "40px", cursor: "pointer" }}
+              onClick={() => navigate("/")}
+            />
+            <button
+              onClick={() => navigate("/map-view")}
+              style={{
+                padding: "8px 12px",
+                backgroundColor: "#1e40af",
+                color: "#fff",
+                border: "none",
+                borderRadius: "12px",
+                cursor: "pointer",
+              }}
+            >
+              Map View
+            </button>
+          </div>
+
+          {/* Main Title */}
+          <h1 style={{ fontSize: "2rem", fontWeight: "bold", marginBottom: "48px" }}>Route Navigator</h1>
+
+          {/* Inputs */}
+          <input
+            type="text"
+            placeholder="Origin (latitude,longitude)"
+            value={origin}
+            onChange={(e) => setOrigin(e.target.value)}
+            style={{
+              marginBottom: "20px",
+              padding: "10px",
+              borderRadius: "15px",
+              border: "none",
+              width: "300px",
+              maxWidth: "90%",
+            }}
+          />
+          <input
+            type="text"
+            placeholder="Destination (latitude,longitude)"
+            value={destination}
+            onChange={(e) => setDestination(e.target.value)}
+            style={{
+              marginBottom: "20px",
+              padding: "10px",
+              borderRadius: "15px",
+              border: "none",
+              width: "300px",
+              maxWidth: "90%",
+            }}
+          />
+
+          {/* Suggest Routes button */}
+          <button
+            onClick={handleRouteSuggestion}
+            style={{
+              width: "150px",
+              height: "50px",
+              backgroundColor: "#1e40af",
+              color: "#fff",
+              border: "none",
+              borderRadius: "15px",
+              cursor: "pointer",
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+              fontSize: "1rem",
+            }}
+          >
+            Suggest Routes
+          </button>
+
+          {/* Suggested Routes List */}
+          <div style={{ marginTop: "20px", color: "white" }}>
+            {suggestedRoutes.length > 0 ? (
+              suggestedRoutes.map((route, index) => (
+                <div key={index}>{route}</div>
+              ))
+            ) : (
+              <div>No routes suggested yet.</div>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   );
 };

@@ -9,16 +9,16 @@ import logo from "../assets/logo.png";
 const MapView = () => {
   const mapContainerRef = useRef(null);
   const mapRef = useRef(null);
-  const markerRef = useRef(null);
   const [nearestRoutes, setNearestRoutes] = useState([]);
   const [selectedRoute, setSelectedRoute] = useState(null);
+  const [markerCenter, setMarkerCenter] = useState({ lng: 121.0357, lat: 14.4981 });
   const navigate = useNavigate();
 
   useEffect(() => {
     const map = new maplibregl.Map({
       container: mapContainerRef.current,
       style: `https://maps.geo.${awsConfig.region}.amazonaws.com/maps/v0/maps/${awsConfig.mapName}/style-descriptor?key=${awsConfig.apiKey}`,
-      center: [121.0357, 14.4981],
+      center: [markerCenter.lng, markerCenter.lat],
       zoom: 11,
     });
 
@@ -70,29 +70,71 @@ const MapView = () => {
         paint: { "line-color": "#FFA500", "line-width": 3 },
       });
 
-      markerRef.current = new maplibregl.Marker({ color: "#ff0000" })
-        .setLngLat(map.getCenter())
-        .addTo(map);
-
-      map.on("moveend", () => {
-        const center = map.getCenter();
-        markerRef.current.setLngLat(center);
-        updateNearestRoutes(center);
+      map.addLayer({
+        id: "p2p-line",
+        type: "line",
+        source: "transit-route",
+        filter: ["==", ["get", "type"], "P2P-Bus"],
+        layout: { "line-join": "round", "line-cap": "round" },
+        paint: { "line-color": "#f97316", "line-width": 4 },
       });
+
+      map.addLayer({
+        id: "bus-line",
+        type: "line",
+        source: "transit-route",
+        filter: ["==", ["get", "type"], "Bus"],
+        layout: { "line-join": "round", "line-cap": "round" },
+        paint: { "line-color": "#3b82f6", "line-width": 4 }, 
+      });
+      
+      map.addLayer({
+        id: "bus-stops",
+        type: "circle",
+        source: "transit-route",
+        filter: ["==", ["get", "type"], "Bus-Stop"],
+        paint: {
+          "circle-radius": 6,
+          "circle-color": "#3b82f6",
+          "circle-stroke-color": "#fff",
+          "circle-stroke-width": 2,
+        },
+      });
+
+      // Listen to map movement
+      map.on("moveend", () => {
+        const mapCenter = map.getCenter();
+        const centerScreenPoint = map.project(mapCenter);
+        centerScreenPoint.x += 150; // Shift 150px right
+        const shiftedCenter = map.unproject(centerScreenPoint);
+
+        setMarkerCenter({ lng: shiftedCenter.lng, lat: shiftedCenter.lat });
+        updateNearestRoutes(shiftedCenter);
+      });
+
+      // Initialize first nearest routes
+      const initialCenter = map.getCenter();
+      const initialScreenPoint = map.project(initialCenter);
+      initialScreenPoint.x += 150;
+      const initialShiftedCenter = map.unproject(initialScreenPoint);
+
+      setMarkerCenter({ lng: initialShiftedCenter.lng, lat: initialShiftedCenter.lat });
+      updateNearestRoutes(initialShiftedCenter);
     });
 
     return () => map.remove();
   }, []);
 
   const calculateDistance = (point1, point2) => {
-    const R = 6371;
-    const dLat = ((point2[1] - point1[1]) * Math.PI) / 180;
-    const dLon = ((point2[0] - point1[0]) * Math.PI) / 180;
-    const lat1 = (point1[1] * Math.PI) / 180;
-    const lat2 = (point2[1] * Math.PI) / 180;
+    const R = 6371; // Earth's radius in km
+    const dLat = ((point2.lat - point1.lat) * Math.PI) / 180;
+    const dLon = ((point2.lng - point1.lng) * Math.PI) / 180;
+    const lat1 = (point1.lat * Math.PI) / 180;
+    const lat2 = (point2.lat * Math.PI) / 180;
 
-    const a = Math.sin(dLat / 2) ** 2 +
-              Math.sin(dLon / 2) ** 2 * Math.cos(lat1) * Math.cos(lat2);
+    const a =
+      Math.sin(dLat / 2) ** 2 +
+      Math.sin(dLon / 2) ** 2 * Math.cos(lat1) * Math.cos(lat2);
     return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   };
 
@@ -100,7 +142,7 @@ const MapView = () => {
     if (!coordinates || coordinates.length === 0) return Infinity;
 
     return coordinates.reduce((minDist, coord) => {
-      const dist = calculateDistance([center.lng, center.lat], coord);
+      const dist = calculateDistance({ lng: coord[0], lat: coord[1] }, center);
       return dist < minDist ? dist : minDist;
     }, Infinity);
   };
@@ -134,7 +176,7 @@ const MapView = () => {
         yy = y1 + param * D;
       }
 
-      const dist = calculateDistance([center.lng, center.lat], [xx, yy]);
+      const dist = calculateDistance({ lng: xx, lat: yy }, center);
       if (dist < minDistance) minDistance = dist;
     }
 
@@ -142,36 +184,21 @@ const MapView = () => {
   };
 
   const updateNearestRoutes = (center) => {
-    const map = mapRef.current;
-    if (!map || !map.isStyleLoaded()) return;
-
-    const features = map.querySourceFeatures("transit-route");
-
-    const seen = new Map();
-    const filtered = features.filter((f) => {
-      const id = f.properties.name;
-      if (!seen.has(id)) {
-        seen.set(id, true);
-        return true;
-      }
-      return false;
-    });
-
-    const routesWithDistance = filtered.map((feature) => {
-      const coords = feature.geometry.coordinates;
+    const distances = transitRoute.features.map((route) => {
       let distance = 0;
+      const coords = route.geometry.coordinates;
 
-      if (feature.properties.type === "Jeep") {
-        distance = calculateRouteLineDistance(coords, center);
-      } else {
+      if (route.properties.type === "MRT" || route.properties.type === "LRT" || route.properties.type === "LRT-Stop") {
         distance = calculateNearestStopDistance(coords, center);
+      } else if (route.properties.type === "Jeep") {
+        distance = calculateRouteLineDistance(coords, center);
       }
 
-      return { properties: feature.properties, geometry: feature.geometry, distance };
+      return { ...route, distance };
     });
 
-    const sorted = routesWithDistance.sort((a, b) => a.distance - b.distance);
-    setNearestRoutes(sorted.slice(0, 3));
+    const sortedRoutes = distances.sort((a, b) => a.distance - b.distance);
+    setNearestRoutes(sortedRoutes.slice(0, 3));
   };
 
   const handleRouteSelection = (route) => {
@@ -180,6 +207,7 @@ const MapView = () => {
 
   return (
     <div style={{ position: "relative", height: "100vh" }}>
+      {/* Sidebar */}
       <div
         style={{
           position: "absolute",
@@ -212,7 +240,7 @@ const MapView = () => {
             onClick={() => navigate("/nav-view")}
             style={{
               padding: "10px 16px",
-              backgroundColor: "#511F8E",
+              backgroundColor: "#1e40af",
               color: "#fff",
               border: "none",
               borderRadius: "6px",
@@ -243,6 +271,8 @@ const MapView = () => {
           ))}
         </ul>
       </div>
+
+      {/* Map container */}
       <div
         ref={mapContainerRef}
         style={{
@@ -251,6 +281,24 @@ const MapView = () => {
           left: 0,
           width: "100%",
           height: "100%",
+        }}
+      />
+
+      {/* Marker overlay */}
+      <div
+        style={{
+          position: "absolute",
+          top: "50%",
+          left: "calc(50% + 150px)", // shift center to the right
+          transform: "translate(-50%, -100%)", // center marker itself properly
+          width: "24px",
+          height: "24px",
+          backgroundColor: "#ff0000",
+          borderRadius: "50% 50% 50% 0",
+          transformOrigin: "bottom center",
+          rotate: "-45deg",
+          zIndex: 20,
+          boxShadow: "0 0 5px rgba(0,0,0,0.5)",
         }}
       />
     </div>
