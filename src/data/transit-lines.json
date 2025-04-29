@@ -231,6 +231,7 @@
           [121.024528, 14.554492],
           [121.025712, 14.553741],
           [121.026311, 14.553136],
+          [121.027801, 14.551701],
           [121.028607, 14.550844]
         ]
       }
@@ -311,7 +312,7 @@
       },
       "geometry": {
         "type": "Point",
-        "coordinates": [121.046094, 14.415060]
+        "coordinates": [121.045988, 14.415097]
       }
     },
     {
@@ -322,7 +323,7 @@
       },
       "geometry": {
         "type": "Point",
-        "coordinates": [121.045478, 14.423097]
+        "coordinates": [121.045664, 14.453916]
       }
     },
     {
@@ -333,7 +334,7 @@
       },
       "geometry": {
         "type": "Point",
-        "coordinates": [121.045654, 14.453530]
+        "coordinates": [121.045384, 14.487287]
       }
     },
     {
@@ -344,7 +345,7 @@
       },
       "geometry": {
         "type": "Point",
-        "coordinates": [121.045692, 14.415030]
+        "coordinates": [121.007687, 14.557701]
       }
     },
     {
@@ -355,7 +356,7 @@
       },
       "geometry": {
         "type": "Point",
-        "coordinates": [121.045547, 14.416301]
+        "coordinates": [121.012006, 14.559891]
       }
     },
     {
@@ -366,7 +367,7 @@
       },
       "geometry": {
         "type": "Point",
-        "coordinates": [121.045526, 14.418548]
+        "coordinates": [121.015289, 14.561137]
       }
     },
     {
@@ -377,7 +378,7 @@
       },
       "geometry": {
         "type": "Point",
-        "coordinates": [121.045596, 14.420199]
+        "coordinates": [121.020268, 14.557258]
       }
     },
     {
@@ -388,7 +389,7 @@
       },
       "geometry": {
         "type": "Point",
-        "coordinates": [121.045616, 14.422453]
+        "coordinates": [121.024528, 14.554492]
       }
     },
     {
@@ -399,7 +400,7 @@
       },
       "geometry": {
         "type": "Point",
-        "coordinates": [121.045368, 14.452434]
+        "coordinates": [121.026311, 14.553136]
       }
     },
     {
@@ -608,6 +609,7 @@
           [121.019989, 14.542374],
           [121.021556, 14.543601],
           [121.028052, 14.549125],
+          [121.034478, 14.554538],
           [121.042921, 14.561645],
           [121.044087, 14.563114],
           [121.044654, 14.564224],
@@ -619,6 +621,7 @@
           [121.053640, 14.581172],
           [121.055130, 14.583472],
           [121.055654, 14.584777],
+          [121.056722, 14.587845],
           [121.057297, 14.589752],
           [121.057573, 14.591026],
           [121.058919, 14.595108],
@@ -990,6 +993,149 @@
       "geometry": {
         "type": "Point",
         "coordinates": [121.021089, 14.657557]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "type": "MRT-Stop",
+        "name": "Taft Avenue"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [121.001761, 14.537584]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "type": "MRT-Stop",
+        "name": "Magallanes"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [121.019989, 14.542374]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "type": "MRT-Stop",
+        "name": "Ayala"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [121.028052, 14.549125]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "type": "MRT-Stop",
+        "name": "Buendia"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [121.034478, 14.554538]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "type": "MRT-Stop",
+        "name": "Guadalupe"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [121.045559, 14.566978]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "type": "MRT-Stop",
+        "name": "Boni"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [121.048192, 14.573711]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "type": "MRT-Stop",
+        "name": "Shaw Boulevard"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [121.053640, 14.581172]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "type": "MRT-Stop",
+        "name": "Ortigas"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [121.056722, 14.587845]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "type": "MRT-Stop",
+        "name": "Santolan-Annapolis"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [121.056602, 14.607421]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "type": "MRT-Stop",
+        "name": "Araneta"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [121.051130, 14.619356]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "type": "MRT-Stop",
+        "name": "GMA Kamuning"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [121.043398, 14.635186]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "type": "MRT-Stop",
+        "name": "Quezon Avenue"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [121.038469, 14.642652]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "type": "MRT-Stop",
+        "name": "North Avenue"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [121.032307, 14.652188]
       }
     }
   ]

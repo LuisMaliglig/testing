@@ -17,7 +17,7 @@ const Home = () => {
       container: mapContainerRef.current,
       style: `https://maps.geo.${awsConfig.region}.amazonaws.com/maps/v0/maps/${awsConfig.mapName}/style-descriptor?key=${awsConfig.apiKey}`,
       center: [121.0357, 14.4981],
-      zoom: 11,
+      zoom: 12,
     });
 
     mapRef.current = map;
@@ -33,23 +33,32 @@ const Home = () => {
         type: "line",
         source: "transit-route",
         filter: ["==", ["get", "type"], "MRT"],
+        layout: { "line-join": "round", "line-cap": "round" },
+        paint: { "line-color": "#facc15", "line-width": 4 },
+      });
+  
+      map.addLayer({
+        id: "mrt-stops",
+        type: "circle",
+        source: "transit-route",
+        filter: ["==", ["get", "type"], "MRT-Stop"],
         paint: {
-          "line-color": "#facc15",
-          "line-width": 4,
+          "circle-radius": 5,
+          "circle-color": "#facc15",
+          "circle-stroke-color": "#fff",
+          "circle-stroke-width": 1,
         },
       });
-
+  
       map.addLayer({
         id: "lrt-line",
         type: "line",
         source: "transit-route",
         filter: ["==", ["get", "type"], "LRT"],
-        paint: {
-          "line-color": "#22c55e",
-          "line-width": 4,
-        },
+        layout: { "line-join": "round", "line-cap": "round" },
+        paint: { "line-color": "#22c55e", "line-width": 4 },
       });
-
+  
       map.addLayer({
         id: "lrt-stops",
         type: "circle",
@@ -62,24 +71,53 @@ const Home = () => {
           "circle-stroke-width": 1,
         },
       });
-
+  
       map.addLayer({
         id: "jeep-lines",
         type: "line",
         source: "transit-route",
         filter: ["==", ["get", "type"], "Jeep"],
-        paint: {
-          "line-color": "#FFA500",
-          "line-width": 3,
-        },
+        layout: { "line-join": "round", "line-cap": "round" },
+        paint: { "line-color": "#FFA500", "line-width": 3 },
       });
+  
+      map.addLayer({
+        id: "p2p-bus-lines",
+        type: "line",
+        source: "transit-route",
+        filter: ["==", ["get", "type"], "P2P-Bus"],
+        layout: { "line-join": "round", "line-cap": "round" },
+        paint: { "line-color": "#f97316", "line-width": 3 },
+      });
+  
+      map.addLayer({
+        id: "bus-lines",
+        type: "line",
+        source: "transit-route",
+        filter: ["==", ["get", "type"], "Bus"],
+        layout: { "line-join": "round", "line-cap": "round" },
+        paint: { "line-color": "#3b82f6", "line-width": 3 },
+      });
+  
+      map.addLayer({
+        id: "bus-stops",
+        type: "circle",
+        source: "transit-route",
+        filter: ["==", ["get", "type"], "Bus-Stop"],
+        paint: {
+          "circle-radius": 5,
+          "circle-color": "#3b82f6",
+          "circle-stroke-color": "#fff",
+          "circle-stroke-width": 1,
+        },
+      })
     });
 
     return () => map.remove();
   }, []);
 
   return (
-    <div style={{ position: "relative", height: "100vh" }}>
+    <div style={{ position: "relative", height: "100vh", fontFamily: "Montserrat, sans-serif" }}>
       {/* Fullscreen blur layer with centered overlay */}
       <div style={{
         position: "absolute",
@@ -88,7 +126,7 @@ const Home = () => {
         width: "100%",
         height: "100%",
         backdropFilter: "blur(4px)",
-        backgroundColor: "rgba(0, 0, 0, 0.2)", // optional: extra darkening
+        backgroundColor: "rgba(0, 0, 0, 0.4)", 
         zIndex: 10,
         display: "flex",
         alignItems: "center",
@@ -97,7 +135,7 @@ const Home = () => {
         <div style={{
           textAlign: "center",
           color: "white",
-          backgroundColor: "rgba(0, 0, 0, 0.4)",
+          backgroundColor: "rgba(0, 0, 0, 0.6)",
           padding: "24px",
           borderRadius: "12px"
         }}>
@@ -116,8 +154,8 @@ const Home = () => {
             <button
               onClick={() => navigate("/map-view")}
               style={{
-                width: "150px", // Set width
-                height: "80px", // Set height
+                width: "150px", 
+                height: "80px", 
                 backgroundColor: "#1e40af",
                 color: "#fff",
                 border: "none",
@@ -126,7 +164,8 @@ const Home = () => {
                 display: "flex",
                 justifyContent: "center",
                 alignItems: "center",
-                fontSize: "1rem", // Adjust font size for better button text fit
+                fontSize: "1rem",
+                fontFamily: "Montserrat, sans-serif" 
               }}
             >
               Map View
@@ -134,8 +173,8 @@ const Home = () => {
             <button
               onClick={() => navigate("/nav-view")}
               style={{
-                width: "150px", // Set width
-                height: "80px", // Set height
+                width: "150px", 
+                height: "80px", 
                 backgroundColor: "#1e40af",
                 color: "#fff",
                 border: "none",
@@ -144,7 +183,8 @@ const Home = () => {
                 display: "flex",
                 justifyContent: "center",
                 alignItems: "center",
-                fontSize: "1rem", // Adjust font size for better button text fit
+                fontSize: "1rem",
+                fontFamily: "Montserrat, sans-serif" 
               }}
             >
               Navigator
