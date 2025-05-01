@@ -2,7 +2,7 @@ export const awsConfig = {
     region: "ap-southeast-1",
     apiKey: process.env.REACT_APP_API_KEY,
     mapName: "explore.map.Grab",
-    routeCalculatorName: "explore.route-calculator.Grab",
+    routeCalculatorName: "esri-route",
     placeIndex: "explore.place.Grab",
     identityPoolId: process.env.REACT_APP_IDENTITY_POOL_ID,
   };

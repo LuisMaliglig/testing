@@ -13,6 +13,14 @@ const MapView = () => {
   const [selectedRoute, setSelectedRoute] = useState(null);
   const [markerCenter, setMarkerCenter] = useState({ lng: 121.0357, lat: 14.4981 });
   const navigate = useNavigate();
+  const [vehicleFilters, setVehicleFilters] = useState({
+    MRT: true,
+    LRT: true,
+    Jeep: true,
+    "P2P-Bus": true,
+    Bus: true,
+  });
+
   const formatDistance = (km) => {
     return km < 1 ? `${(km * 1000).toFixed(0)} m` : `${km.toFixed(2)} km`;
   };
@@ -21,15 +29,15 @@ const MapView = () => {
     const minutes = Math.round((km / 5) * 60);
     return `${minutes} min`;
   };
-  
-  useEffect(() => {
-  const link = document.createElement('link');
-  link.href = 'https://fonts.googleapis.com/icon?family=Material+Icons';
-  link.rel = 'stylesheet';
-  document.head.appendChild(link);
 
-  return () => {
-    document.head.removeChild(link);
+  useEffect(() => {
+    const link = document.createElement('link');
+    link.href = 'https://fonts.googleapis.com/icon?family=Material+Icons';
+    link.rel = 'stylesheet';
+    document.head.appendChild(link);
+
+    return () => {
+      document.head.removeChild(link);
     };
   }, []);
 
@@ -38,11 +46,11 @@ const MapView = () => {
     montserrat.href = 'https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600&display=swap';
     montserrat.rel = 'stylesheet';
     document.head.appendChild(montserrat);
-  
+
     return () => {
       document.head.removeChild(montserrat);
     };
-  }, []);  
+  }, []);
 
   useEffect(() => {
     const map = new maplibregl.Map({
@@ -57,7 +65,13 @@ const MapView = () => {
     map.on("load", () => {
       map.addSource("transit-route", {
         type: "geojson",
-        data: transitRoute,
+        data: {
+          type: "FeatureCollection",
+          features: transitRoute.features.filter(feature => {
+            const type = feature.properties.type.replace('-Stop', '');
+            return vehicleFilters[type];
+          })
+        },
       });
 
       addAllLayers(map);
@@ -82,35 +96,55 @@ const MapView = () => {
     });
 
     return () => map.remove();
-  }, []);
+  }, [vehicleFilters]); // Added vehicleFilters as a dependency
 
   useEffect(() => {
     if (!mapRef.current?.getStyle()) return;
-  
+
     if (selectedRoute) {
       // Show only the selected route
       const selectedGeoJSON = {
         type: "FeatureCollection",
         features: [selectedRoute],
       };
-  
+
       if (mapRef.current.getSource("transit-route")) {
         mapRef.current.getSource("transit-route").setData(selectedGeoJSON);
       }
-    } else {
-      if (mapRef.current.getSource("transit-route")) {
-        mapRef.current.getSource("transit-route").setData(transitRoute);
-      }
+      // Hide all stop layers when a route is selected
       if (mapRef.current.getLayer("lrt-stops")) {
-        mapRef.current.setLayoutProperty("lrt-stops", "visibility", "visible");
+        mapRef.current.setLayoutProperty("lrt-stops", "visibility", "none");
       }
       if (mapRef.current.getLayer("bus-stops")) {
-        mapRef.current.setLayoutProperty("bus-stops", "visibility", "visible");
+        mapRef.current.setLayoutProperty("bus-stops", "visibility", "none");
+      }
+      if (mapRef.current.getLayer("mrt-stops")) {
+        mapRef.current.setLayoutProperty("mrt-stops", "visibility", "none");
+      }
+    } else {
+      if (mapRef.current.getSource("transit-route")) {
+        mapRef.current.getSource("transit-route").setData(
+          {
+            type: "FeatureCollection",
+            features: transitRoute.features.filter(feature => {
+              const type = feature.properties.type.replace('-Stop', '');
+              return vehicleFilters[type];
+            })
+          }
+        );
+      }
+      if (mapRef.current.getLayer("lrt-stops")) {
+        mapRef.current.setLayoutProperty("lrt-stops", "visibility", vehicleFilters.LRT ? "visible" : "none");
+      }
+      if (mapRef.current.getLayer("bus-stops")) {
+        mapRef.current.setLayoutProperty("bus-stops", "visibility", vehicleFilters.Bus ? "visible" : "none");
+      }
+      if (mapRef.current.getLayer("mrt-stops")) {
+        mapRef.current.setLayoutProperty("mrt-stops", "visibility", vehicleFilters.MRT ? "visible" : "none");
       }
     }
-  }, [selectedRoute]);
-  
-  
+  }, [selectedRoute, vehicleFilters]);
+
 
   const addAllLayers = (map) => {
     map.addLayer({
@@ -257,11 +291,23 @@ const MapView = () => {
   };
 
   const updateNearestRoutes = (center) => {
-    const distances = transitRoute.features.map((route) => {
+    const filteredRoutes = transitRoute.features.filter(route => {
+      const type = route.properties.type.replace('-Stop', '');
+      return vehicleFilters[type];
+    });
+
+    const distances = filteredRoutes.map((route) => {
       let distance = 0;
       const coords = route.geometry.coordinates;
 
-      if (route.properties.type === "MRT" || route.properties.type === "MRT-Stop" || route.properties.type === "LRT" || route.properties.type === "LRT-Stop" || route.properties.type === "Bus" || route.properties.type === "Bus-Stop" || route.properties.type === "P2P-Bus") {
+      if (
+        route.properties.type === "MRT" || 
+        route.properties.type === "MRT-Stop" || 
+        route.properties.type === "LRT" || 
+        route.properties.type === "LRT-Stop" || 
+        route.properties.type === "Bus" || 
+        route.properties.type === "Bus-Stop" || 
+        route.properties.type === "P2P-Bus") {
         distance = calculateNearestStopDistance(coords, center);
       } else if (route.properties.type === "Jeep") {
         distance = calculateRouteLineDistance(coords, center);
@@ -279,25 +325,30 @@ const MapView = () => {
       setSelectedRoute(null); // Deselect if clicking again
     } else {
       setSelectedRoute(route);
-  
+
       // Get the route's coordinates and calculate its center
       const coordinates = route.geometry.coordinates;
-      const routeCenter = coordinates[Math.floor(coordinates.length / 2)]; 
-  
+      const routeCenter = coordinates[Math.floor(coordinates.length / 2)];
+
       // Pan the map to the selected route center
       mapRef.current.flyTo({
-        center: [routeCenter[0], routeCenter[1]], 
+        center: [routeCenter[0], routeCenter[1]],
         zoom: 12,
-        essential: true, 
+        essential: true,
       });
     }
   };
 
   const handleResetSelection = () => {
-    setSelectedRoute(null); 
+    setSelectedRoute(null);
   };
-  
-  
+
+  const handleFilterChange = (type) => {
+    setVehicleFilters(prevFilters => ({
+      ...prevFilters,
+      [type]: !prevFilters[type],
+    }));
+  };
 
   const getRouteColor = (type) => {
     switch (type) {
@@ -308,14 +359,14 @@ const MapView = () => {
         return "#3b82f6";
       case "MRT":
       case "MRT-Stop":
-        return "#facc15"; 
+        return "#facc15";
       case "LRT":
       case "LRT-Stop":
-        return "#22c55e"; 
+        return "#22c55e";
       case "Jeep":
         return "#FFA500";
       default:
-        return "#ccc"; 
+        return "#ccc";
     }
   };
 
@@ -364,7 +415,24 @@ const MapView = () => {
             Nav View
           </button>
         </div>
-  
+
+        <h3 style={{ marginBottom: "8px", fontSize: "1.1rem", fontWeight: "bold" }}>
+          Filter by Vehicle Type
+        </h3>
+        <div style={{ marginBottom: "16px" }}>
+          {Object.keys(vehicleFilters).map((type) => (
+            <label key={type} style={{ display: "block", marginBottom: "4px" }}>
+              <input
+                type="checkbox"
+                checked={vehicleFilters[type]}
+                onChange={() => handleFilterChange(type)}
+                style={{ marginRight: "8px" }}
+              />
+              {type}
+            </label>
+          ))}
+        </div>
+
         <h2 style={{ marginBottom: "16px", fontSize: "1.25rem", fontWeight: "bold" }}>
           Nearest Routes
         </h2>
@@ -425,16 +493,55 @@ const MapView = () => {
             border: "none",
             borderRadius: "4px",
             cursor: "pointer",
-            marginTop: "5  px",
+            marginTop: "15px",
             fontWeight: "bold",
             fontFamily: "Montserrat"
           }}
         >
-          Reset
+          Reset Selection
         </button>
-
       </div>
-  
+
+      {/* Legend */}
+      <div
+        style={{
+          position: "absolute",
+          top: "16px",
+          right: "16px",
+          backgroundColor: "rgba(0, 0, 0, 0.8)",
+          color: "white",
+          padding: "12px",
+          borderRadius: "8px",
+          zIndex: 10,
+          boxShadow: "0 2px 4px rgba(0, 0, 0, 0.4)",
+        }}
+      >
+        <h4 style={{ marginBottom: "8px", fontWeight: "bold" }}>Legend</h4>
+        <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <div style={{ width: "16px", height: "16px", borderRadius: "50%", backgroundColor: "#facc15" }} />
+            <span>MRT</span>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <div style={{ width: "16px", height: "16px", borderRadius: "50%", backgroundColor: "#22c55e" }} />
+            <span>LRT</span>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <div style={{ width: "16px", height: "16px", borderRadius: "50%", backgroundColor: "#FFA500" }} />
+            <span>Jeep</span>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <div style={{ width: "16px", height: "16px", borderRadius: "50%", backgroundColor: "#f97316" }} />
+            <span>P2P Bus</span>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <div style={{ width: "16px", height: "16px", borderRadius: "50%", backgroundColor: "#3b82f6" }} />
+            <span>Bus</span>
+          </div>
+          {/* Add more legend items as needed */}
+        </div>
+      </div>
+
       {/* Map container */}
       <div
         ref={mapContainerRef}
@@ -444,14 +551,15 @@ const MapView = () => {
           left: 0,
           width: "100%",
           height: "100%",
+          zIndex: 1,
         }}
       />
-  
+
       {/* Marker overlay */}
       <div
         style={{
           position: "absolute",
-          top: "50%",
+          top: "47%",
           left: "calc(50% + 150px)",
           width: "24px",
           height: "24px",
@@ -465,7 +573,6 @@ const MapView = () => {
       />
     </div>
   );
-
 };
 
 export default MapView;

@@ -1,11 +1,14 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, useMemo } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { awsConfig } from "../config/config";
 import transitRoute from "../data/transit-lines.json";
 import { useNavigate } from "react-router-dom";
 import AWS from 'aws-sdk';
-import logo from "../assets/logo.png"; // Make sure to import your logo
+import logo from "../assets/logo.png";
+import * as turf from "@turf/turf";
+import { buildSnappedRouteData } from "../components/routeUtils";
+
 
 const NavView = () => {
   const [awsReady, setAwsReady] = useState(false);
@@ -14,18 +17,22 @@ const NavView = () => {
   const [origin, setOrigin] = useState("");
   const [destination, setDestination] = useState("");
   const [suggestedRoutes, setSuggestedRoutes] = useState([]);
+  const [selectedRouteIndex, setSelectedRouteIndex] = useState(null);
   const navigate = useNavigate();
+  const [awsRouteData, setAwsRouteData] = useState(null);
+  
+  const snappedRouteData = useMemo(() => {
+    if (!awsRouteData) return null;
+    return buildSnappedRouteData(awsRouteData, transitRoute.features);
+  }, [awsRouteData]);
 
-  // Configure AWS SDK
   useEffect(() => {
     AWS.config.region = awsConfig.region;
-  
     const credentials = new AWS.CognitoIdentityCredentials({
       IdentityPoolId: awsConfig.identityPoolId,
     });
-  
     AWS.config.credentials = credentials;
-  
+
     credentials.get((err) => {
       if (err) {
         console.error("Error retrieving AWS credentials:", err);
@@ -35,16 +42,13 @@ const NavView = () => {
       }
     });
   }, []);
-  
-
-  const routeCalculator = new AWS.Location();
 
   useEffect(() => {
     const map = new maplibregl.Map({
       container: mapContainerRef.current,
       style: `https://maps.geo.${awsConfig.region}.amazonaws.com/maps/v0/maps/${awsConfig.mapName}/style-descriptor?key=${awsConfig.apiKey}`,
       center: [121.0357, 14.4981],
-      zoom: 11,
+      zoom: 12,
     });
 
     mapRef.current = map;
@@ -55,7 +59,45 @@ const NavView = () => {
         data: transitRoute,
       });
 
-      // Add your route layers here if needed
+      const layers = [
+        { id: "mrt-line", filter: "MRT", color: "#facc15", width: 4 },
+        { id: "lrt-line", filter: "LRT", color: "#22c55e", width: 4 },
+        { id: "jeep-lines", filter: "Jeep", color: "#FFA500", width: 3 },
+        { id: "p2p-bus-lines", filter: "P2P-Bus", color: "#f97316", width: 3 },
+        { id: "bus-lines", filter: "Bus", color: "#3b82f6", width: 3 },
+      ];
+
+      layers.forEach(({ id, filter, color, width }) => {
+        map.addLayer({
+          id,
+          type: "line",
+          source: "transit-route",
+          filter: ["==", ["get", "type"], filter],
+          layout: { "line-join": "round", "line-cap": "round" },
+          paint: { "line-color": color, "line-width": width },
+        });
+      });
+
+      const stopLayers = [
+        { id: "mrt-stops", filter: "MRT-Stop", color: "#facc15" },
+        { id: "lrt-stops", filter: "LRT-Stop", color: "#16a34a" },
+        { id: "bus-stops", filter: "Bus-Stop", color: "#3b82f6" },
+      ];
+
+      stopLayers.forEach(({ id, filter, color }) => {
+        map.addLayer({
+          id,
+          type: "circle",
+          source: "transit-route",
+          filter: ["==", ["get", "type"], filter],
+          paint: {
+            "circle-radius": 5,
+            "circle-color": color,
+            "circle-stroke-color": "#fff",
+            "circle-stroke-width": 1,
+          },
+        });
+      });
     });
 
     return () => map.remove();
@@ -66,46 +108,65 @@ const NavView = () => {
       setSuggestedRoutes(["Please select valid origin and destination."]);
       return;
     }
-  
-    // If credentials aren't ready yet, wait
+
     if (!AWS.config.credentials || !AWS.config.credentials.accessKeyId) {
-      console.log("AWS credentials not yet available.");
       setSuggestedRoutes(["AWS credentials not yet available. Please try again."]);
       return;
     }
-  
+
     const originCoords = origin.split(",").map(Number);
     const destinationCoords = destination.split(",").map(Number);
-  
+
     const routeCalculator = new AWS.Location();
-  
+
     const params = {
       CalculatorName: awsConfig.routeCalculatorName,
-      DeparturePosition: [originCoords[1], originCoords[0]], // [lon, lat]
-      DestinationPosition: [destinationCoords[1], destinationCoords[0]], // [lon, lat]
+      DeparturePosition: [originCoords[1], originCoords[0]],
+      DestinationPosition: [destinationCoords[1], destinationCoords[0]],
     };
-  
+
     try {
       const data = await routeCalculator.calculateRoute(params).promise();
+      setAwsRouteData(data); // ✅ Triggers useEffect
+
       const routes = data.Legs.map((leg, index) => {
-        return `Route ${index + 1}: ${(leg.Distance).toFixed(2)} km, ${(leg.DurationSeconds / 60).toFixed(1)} mins`;
+        return `Route ${index + 1}: ${leg.Distance.toFixed(2)} km, ${(leg.DurationSeconds / 60).toFixed(1)} mins`;
       });
       setSuggestedRoutes(routes);
+      setSelectedRouteIndex(0);
     } catch (error) {
       console.error("Error calculating route:", error);
       setSuggestedRoutes(["Error calculating route. Please try again."]);
     }
   };
 
+  useEffect(() => {
+    console.log("AWS Route Data:", awsRouteData); // Debug log
+  
+    if (awsRouteData && suggestedRoutes.length > 0) {
+      const snapped = buildSnappedRouteData(awsRouteData, transitRoute.features);
+      setTimeout(() => {
+        navigate("/route-breakdown", {
+          state: {
+            origin,
+            destination,
+            suggestedRoutes,
+            selectedRouteIndex: 0,
+            awsRouteData,
+            snappedRouteData: snapped,
+          },
+        });
+      }, 100); // slight delay to ensure state updates
+    }
+  }, [awsRouteData, suggestedRoutes, origin, destination, navigate]);
+  
+
   return (
-    <div style={{ position: "relative", height: "100vh", fontFamily: "Montserrat, sans-serif"  }}>
-      {/* Fullscreen map container */}
+    <div style={{ position: "relative", height: "100vh", fontFamily: "Montserrat, sans-serif" }}>
       <div
         ref={mapContainerRef}
         style={{ width: "100%", height: "100%", position: "absolute", top: 0, left: 0 }}
       />
-  
-      {/* Main Content Area */}
       <div
         style={{
           position: "absolute",
@@ -133,14 +194,13 @@ const NavView = () => {
             maxWidth: "90%",
           }}
         >
-          {/* Logo and Map View button inside the card */}
           <div
             style={{
               position: "absolute",
               top: "16px",
               right: "16px",
               display: "flex",
-              alignItems: "space-between",
+              alignItems: "center",
               gap: "12px",
             }}
           >
@@ -159,19 +219,16 @@ const NavView = () => {
                 border: "none",
                 borderRadius: "5px",
                 cursor: "pointer",
-                fontFamily: "Montserrat, sans-serif"
               }}
             >
               Map View
             </button>
           </div>
-  
-          {/* Main Title */}
+
           <h1 style={{ fontSize: "2rem", fontWeight: "bold", marginBottom: "48px" }}>
             Route Navigator
           </h1>
-  
-          {/* Inputs */}
+
           <div style={{ display: "flex", gap: "5px" }}>
             <select
               value={origin}
@@ -183,7 +240,6 @@ const NavView = () => {
                 border: "none",
                 width: "300px",
                 maxWidth: "90%",
-                fontFamily: "Montserrat, sans-serif"
               }}
             >
               <option value="">Select Origin</option>
@@ -202,7 +258,6 @@ const NavView = () => {
                 border: "none",
                 width: "300px",
                 maxWidth: "90%",
-                fontFamily: "Montserrat, sans-serif"
               }}
             >
               <option value="">Select Destination</option>
@@ -212,8 +267,7 @@ const NavView = () => {
             </select>
           </div>
 
-          {/* Centered Suggest Routes button */}
-          <div style={{ display: "flex", justifyContent: "center", marginTop: "20px" }}>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", marginTop: "20px", gap: "10px" }}>
             <button
               onClick={handleRouteSuggestion}
               style={{
@@ -224,32 +278,26 @@ const NavView = () => {
                 border: "none",
                 borderRadius: "5px",
                 cursor: "pointer",
-                display: "flex",
-                justifyContent: "center",
-                alignItems: "center",
                 fontSize: "1rem",
-                fontFamily: "Montserrat, sans-serif"
               }}
             >
               Suggest Routes
             </button>
-          </div>
-  
-          {/* Suggested Routes List */}
-          <div style={{ marginTop: "20px", color: "white" }}>
-            {suggestedRoutes.length > 0 ? (
-              suggestedRoutes.map((route, index) => (
-                <div key={index}>{route}</div>
-              ))
-            ) : (
-              <div>No routes suggested yet.</div>
-            )}
+
+            <div style={{ marginTop: "20px", fontSize: "1.1rem" }}>
+              {suggestedRoutes.length > 0 ? (
+                <div style={{ fontSize: "1.2rem", fontWeight: "bold" }}>
+                  {suggestedRoutes[0]}
+                </div>
+              ) : (
+                <div>Loading...</div>
+              )}
+            </div>
           </div>
         </div>
       </div>
     </div>
   );
-  
 };
 
 export default NavView;
