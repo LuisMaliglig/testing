@@ -351,13 +351,16 @@ useEffect(() => {
               }}
             >
               <option value="">Select Origin</option>
-              {/* New Options */}
+              {/* --- Suggested & Added Options --- */}
               <option value="14.656,121.032">SM North EDSA Area</option>
+              <option value="14.621,121.054">Cubao Araneta Area</option>
               <option value="14.604,120.984">Recto LRT Area</option>
-              <option value="14.536,120.997">Baclaran LRT Area</option>
               <option value="14.585,121.057">Ortigas Center Area</option>
-              {/* Keep one original option */}
+              <option value="14.551,121.028">Ayala Center Area (Makati)</option>
+              <option value="14.536,120.997">Baclaran LRT Area</option>
               <option value="14.476337,121.039364">Alabang Town Center Area</option>
+              <option value="14.465414,121.018648">SM Southmall Area</option>
+              {/* Add more relevant origins if needed */}
 
             </select>
 
@@ -371,13 +374,16 @@ useEffect(() => {
               }}
             >
               <option value="">Select Destination</option>
-              {/* New Options */}
+               {/* --- Suggested & Added Options --- */}
               <option value="14.551,121.052">BGC High Street Area</option>
               <option value="14.621,121.054">Cubao Araneta Area</option>
-              <option value="14.598,120.983">Quiapo Area</option>
+              <option value="14.591,120.973">Intramuros Area</option>
               <option value="14.551,121.028">Ayala Center Area (Makati)</option>
-               {/* Keep one original option */}
+              <option value="14.656,120.984">Monumento Area</option>
+              <option value="14.567,121.019">Pasay Taft Area (Near MRT)</option>
+              <option value="14.485168,121.039827">Festival Mall Area</option>
               <option value="14.536381,120.988745">CCP Complex Area</option>
+              {/* Add more relevant destinations if needed */}
 
             </select>
           </div>
