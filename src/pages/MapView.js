@@ -10,15 +10,14 @@ import * as turf from "@turf/turf"; // Import turf for bounding box
 // *** ADD modeColors DEFINITION HERE ***
 const modeColors = {
     MRT: "#facc15", // Yellow-400
-    LRT: "#22c55e", // Green-500
+    LRT1: "#22c55e", // Green-500
+    LRT2: "#7A07D1",
     Jeep: "#FFA500", // Orange
     "P2P-Bus": "#f97316", // Orange-500
     Bus: "#3b82f6", // Blue-500
-    Walk: "#9ca3af", // Gray-400 (Used in RouteBreakdown, might not be needed here)
-    Driving: "#6b7280", // Gray-500 (Used in RouteBreakdown)
-    // Add other potential modes if needed
+    Walk: "#9ca3af", // Gray-400
+    Driving: "#6b7280", // Gray-500 
 };
-// *************************************
 
 const MapView = () => {
   const mapContainerRef = useRef(null);
@@ -29,7 +28,8 @@ const MapView = () => {
   const navigate = useNavigate();
   const [vehicleFilters, setVehicleFilters] = useState({
     MRT: true,
-    LRT: true,
+    LRT1: true,
+    LRT2: true,
     Jeep: true,
     "P2P-Bus": true,
     Bus: true,
@@ -221,8 +221,8 @@ const MapView = () => {
   // Updates the visibility of layers based on filters (only when no route is selected)
   const updateLayerVisibility = () => {
       if (!mapRef.current) return;
-      const stopLayers = ["mrt-stops", "lrt-stops", "bus-stops"]; // Add other stop layers if they exist
-      const lineLayers = ["mrt-line", "lrt-line", "bus-lines", "p2p-bus-lines", "jeep-lines"]; // Add other line layers
+      const stopLayers = ["mrt-stops", "lrt1-stops", "lrt2-stops", "bus-stops"]; // Add other stop layers if they exist
+      const lineLayers = ["mrt-line", "lrt1-line", "lrt2-line", "bus-lines", "p2p-bus-lines", "jeep-lines"]; // Add other line layers
 
       // Function to safely set layout property
       const safeSetLayoutProperty = (layerId, prop, value) => {
@@ -243,12 +243,14 @@ const MapView = () => {
       } else {
           // Set visibility based on filters when nothing is selected
           safeSetLayoutProperty("mrt-stops", "visibility", vehicleFilters.MRT ? "visible" : "none");
-          safeSetLayoutProperty("lrt-stops", "visibility", vehicleFilters.LRT ? "visible" : "none");
+          safeSetLayoutProperty("lrt1-stops", "visibility", vehicleFilters.LRT1 ? "visible" : "none");
+          safeSetLayoutProperty("lrt2-stops", "visibility", vehicleFilters.LRT1 ? "visible" : "none");
           safeSetLayoutProperty("bus-stops", "visibility", vehicleFilters.Bus ? "visible" : "none");
           // Add visibility toggles for P2P/Jeep stops if they exist
 
           safeSetLayoutProperty("mrt-line", "visibility", vehicleFilters.MRT ? "visible" : "none");
-          safeSetLayoutProperty("lrt-line", "visibility", vehicleFilters.LRT ? "visible" : "none");
+          safeSetLayoutProperty("lrt1-line", "visibility", vehicleFilters.LRT1 ? "visible" : "none");
+          safeSetLayoutProperty("lrt2-line", "visibility", vehicleFilters.LRT1 ? "visible" : "none");
           safeSetLayoutProperty("bus-lines", "visibility", vehicleFilters.Bus ? "visible" : "none");
           safeSetLayoutProperty("p2p-bus-lines", "visibility", vehicleFilters['P2P-Bus'] ? "visible" : "none");
           safeSetLayoutProperty("jeep-lines", "visibility", vehicleFilters.Jeep ? "visible" : "none");
@@ -274,10 +276,14 @@ const MapView = () => {
         // MRT Stops
         safeAddLayer({ id: "mrt-stops", type: "circle", source: "transit-route", filter: ["==", ["get", "type"], "MRT-Stop"], paint: { "circle-radius": 5, "circle-color": "#facc15", "circle-stroke-color": "#fff", "circle-stroke-width": 1 } });
         // LRT Line
-        safeAddLayer({ id: "lrt-line", type: "line", source: "transit-route", filter: ["==", ["get", "type"], "LRT"], layout: { "line-join": "round", "line-cap": "round" }, paint: { "line-color": "#22c55e", "line-width": 4 } });
+        safeAddLayer({ id: "lrt1-line", type: "line", source: "transit-route", filter: ["==", ["get", "type"], "LRT1"], layout: { "line-join": "round", "line-cap": "round" }, paint: { "line-color": "#22c55e", "line-width": 4 } });
         // LRT Stops
-        safeAddLayer({ id: "lrt-stops", type: "circle", source: "transit-route", filter: ["==", ["get", "type"], "LRT-Stop"], paint: { "circle-radius": 5, "circle-color": "#16a34a", "circle-stroke-color": "#fff", "circle-stroke-width": 1 } });
-        // Jeep Lines
+        safeAddLayer({ id: "lrt1-stops", type: "circle", source: "transit-route", filter: ["==", ["get", "type"], "LRT1-Stop"], paint: { "circle-radius": 5, "circle-color": "#16a34a", "circle-stroke-color": "#fff", "circle-stroke-width": 1 } });
+         // LRT Line
+         safeAddLayer({ id: "lrt2-line", type: "line", source: "transit-route", filter: ["==", ["get", "type"], "LRT2"], layout: { "line-join": "round", "line-cap": "round" }, paint: { "line-color": "#7A07D1", "line-width": 4 } });
+         // LRT Stops
+         safeAddLayer({ id: "lrt2-stops", type: "circle", source: "transit-route", filter: ["==", ["get", "type"], "LRT2-Stop"], paint: { "circle-radius": 5, "circle-color": "#7A07D1", "circle-stroke-color": "#fff", "circle-stroke-width": 1 } });
+         // Jeep Lines
         safeAddLayer({ id: "jeep-lines", type: "line", source: "transit-route", filter: ["==", ["get", "type"], "Jeep"], layout: { "line-join": "round", "line-cap": "round" }, paint: { "line-color": "#FFA500", "line-width": 3 } });
         // P2P Bus Lines
         safeAddLayer({ id: "p2p-bus-lines", type: "line", source: "transit-route", filter: ["==", ["get", "type"], "P2P-Bus"], layout: { "line-join": "round", "line-cap": "round" }, paint: { "line-color": "#f97316", "line-width": 3 } });
@@ -484,43 +490,63 @@ const MapView = () => {
       }}>
           {/* Top Section (Non-scrolling) */}
           <div style={{padding: "16px", flexShrink: 0}}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
-                  <img src={logo} alt="Logo" style={{ width: "40px", height: "40px", cursor: "pointer" }} onClick={() => navigate("/")}/>
-                  <button onClick={() => navigate("/nav-view")} style={{ padding: "8px 14px", backgroundColor: "#1e40af", color: "#fff", border: "none", borderRadius: "6px", cursor: "pointer", fontSize: '0.9rem' }}>
-                      Nav View
-                  </button>
-              </div>
-              <h3 style={{ marginBottom: "8px", fontSize: "1.0rem", fontWeight: "600" }}>Filter by Vehicle Type</h3>
-              <div style={{ marginBottom: "16px", fontSize: '0.9rem' }}>
-                  {Object.keys(vehicleFilters).map((type) => (
-                      <label key={type} style={{ display: "block", marginBottom: "5px", cursor: 'pointer' }}>
-                          <input type="checkbox" checked={vehicleFilters[type]} onChange={() => handleFilterChange(type)} style={{ marginRight: "8px", cursor: 'pointer', verticalAlign: 'middle' }}/>
-                          <span style={{verticalAlign: 'middle'}}>{type}</span>
-                      </label>
-                  ))}
-              </div>
-              <h2 style={{ marginBottom: "10px", fontSize: "1.15rem", fontWeight: "600" }}>Nearest Routes</h2>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+              <img src={logo} alt="Logo" style={{ width: "40px", height: "40px", cursor: "pointer" }} onClick={() => navigate("/")}/>
+              <button onClick={() => navigate("/nav-view")} style={{ padding: "8px 14px", backgroundColor: "#1e40af", color: "#fff", border: "none", borderRadius: "6px", cursor: "pointer", fontSize: '0.9rem' }}>
+                  Nav View
+              </button>
           </div>
+          <h3 style={{ marginBottom: "8px", fontSize: "1.0rem", fontWeight: "600" }}>Filter by Vehicle Type</h3>
+          {/* --- MODIFIED CONTAINER DIV --- */}
+          <div style={{
+              display: "grid",                  // Use grid layout
+              gridTemplateColumns: "1fr 1fr",   // Create two equal columns
+              gap: "0px 8px",                   // Optional: Add gap (row-gap column-gap) - 8px between columns
+              marginBottom: "10px",
+              fontSize: '0.9rem'
+          }}>
+              {Object.keys(vehicleFilters).map((type) => (
+                  // --- MODIFIED LABEL ---
+                  <label key={type} style={{
+                      // display: "block",  // Remove display: block
+                      marginBottom: "2px",
+                      cursor: 'pointer',
+                      whiteSpace: 'nowrap' // Prevent text wrapping if names are long
+                      }}>
+                      <input
+                          type="checkbox"
+                          checked={vehicleFilters[type]}
+                          onChange={() => handleFilterChange(type)}
+                          style={{ marginRight: "8px", cursor: 'pointer', verticalAlign: 'middle' }}
+                      />
+                      <span style={{verticalAlign: 'middle'}}>{type}</span>
+                  </label>
+              ))}
+          </div>
+          {/* --- END OF MODIFIED SECTION --- */}
+          <h2 style={{ marginTop: "16px", marginBottom: "10px", fontSize: "1.15rem", fontWeight: "600" }}>Nearest Routes</h2>
+          {/* Add margin-top to the heading below the filters for better spacing */}
+</div>
 
           {/* Scrollable List */}
-          <div style={{flexGrow: 1, overflowY: 'auto', padding: '0 16px' /* Add padding here */ }}>
+          <div style={{flexGrow: 1, overflowY: 'auto', padding: '0 16px'  }}>
               <ul style={{ paddingLeft: "0", listStyle: "none", margin: 0 }}>
                   {nearestRoutes.length > 0 ? nearestRoutes.map((route, index) => (
                       <li
-                          key={route.properties.name + index} // Use name + index for better key
+                          key={route.properties.name + index} 
                           onClick={() => handleRouteSelection(route)}
                           style={{
                               cursor: "pointer", marginBottom: "8px",
                               backgroundColor: getRouteColor(route.properties.type),
-                              color: "#111", // Darker text for better contrast on light colors
-                              padding: "10px 14px", borderRadius: "8px", fontWeight: "600", // Semi-bold
+                              color: "#111", 
+                              padding: "10px 10px", borderRadius: "5px", fontWeight: "bold", // Semi-bold
                               border: selectedRoute === route ? "3px solid #fff" : "3px solid transparent", // Thicker border
                               transition: 'background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease',
                               boxShadow: selectedRoute === route ? '0 0 8px rgba(255, 255, 255, 0.7)' : 'none' // Glow effect
                           }}
                       >
-                          <div style={{ fontSize: "1rem", marginBottom: '3px' }}>{route.properties.name}</div>
-                          <div style={{ fontSize: ".9rem", fontWeight: "400", display: "flex", alignItems: "center", gap: "10px", marginTop: "4px", }}>
+                          <div style={{ fontSize: "1rem", marginBottom: '3px', fontWeight: "bold" }}>{route.properties.name}</div>
+                          <div style={{ fontSize: "1rem", fontWeight: "600", display: "flex", alignItems: "center", gap: "10px", marginTop: "4px", }}>
                               <span>{formatDistance(route.distance)}</span>
                               <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
                                   <span className="material-icons" style={{ fontSize: "16px" }}>directions_walk</span>

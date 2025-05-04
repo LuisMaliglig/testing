@@ -27,90 +27,16 @@ const Home = () => {
         type: "geojson",
         data: transitRoute,
       });
-
-      map.addLayer({
-        id: "mrt-line",
-        type: "line",
-        source: "transit-route",
-        filter: ["==", ["get", "type"], "MRT"],
-        layout: { "line-join": "round", "line-cap": "round" },
-        paint: { "line-color": "#facc15", "line-width": 4 },
-      });
-  
-      map.addLayer({
-        id: "mrt-stops",
-        type: "circle",
-        source: "transit-route",
-        filter: ["==", ["get", "type"], "MRT-Stop"],
-        paint: {
-          "circle-radius": 5,
-          "circle-color": "#facc15",
-          "circle-stroke-color": "#fff",
-          "circle-stroke-width": 1,
-        },
-      });
-  
-      map.addLayer({
-        id: "lrt-line",
-        type: "line",
-        source: "transit-route",
-        filter: ["==", ["get", "type"], "LRT"],
-        layout: { "line-join": "round", "line-cap": "round" },
-        paint: { "line-color": "#22c55e", "line-width": 4 },
-      });
-  
-      map.addLayer({
-        id: "lrt-stops",
-        type: "circle",
-        source: "transit-route",
-        filter: ["==", ["get", "type"], "LRT-Stop"],
-        paint: {
-          "circle-radius": 5,
-          "circle-color": "#16a34a",
-          "circle-stroke-color": "#fff",
-          "circle-stroke-width": 1,
-        },
-      });
-  
-      map.addLayer({
-        id: "jeep-lines",
-        type: "line",
-        source: "transit-route",
-        filter: ["==", ["get", "type"], "Jeep"],
-        layout: { "line-join": "round", "line-cap": "round" },
-        paint: { "line-color": "#FFA500", "line-width": 3 },
-      });
-  
-      map.addLayer({
-        id: "p2p-bus-lines",
-        type: "line",
-        source: "transit-route",
-        filter: ["==", ["get", "type"], "P2P-Bus"],
-        layout: { "line-join": "round", "line-cap": "round" },
-        paint: { "line-color": "#f97316", "line-width": 3 },
-      });
-  
-      map.addLayer({
-        id: "bus-lines",
-        type: "line",
-        source: "transit-route",
-        filter: ["==", ["get", "type"], "Bus"],
-        layout: { "line-join": "round", "line-cap": "round" },
-        paint: { "line-color": "#3b82f6", "line-width": 3 },
-      });
-  
-      map.addLayer({
-        id: "bus-stops",
-        type: "circle",
-        source: "transit-route",
-        filter: ["==", ["get", "type"], "Bus-Stop"],
-        paint: {
-          "circle-radius": 5,
-          "circle-color": "#3b82f6",
-          "circle-stroke-color": "#fff",
-          "circle-stroke-width": 1,
-        },
-      })
+      map.addLayer({id: "mrt-line", type: "line", source: "transit-route", filter: ["==", ["get", "type"], "MRT"], layout: { "line-join": "round", "line-cap": "round" }, paint: { "line-color": "#facc15", "line-width": 4 },});
+      map.addLayer({id: "mrt-stops", type: "circle", source: "transit-route", filter: ["==", ["get", "type"], "MRT-Stop"], paint: {"circle-radius": 5, "circle-color": "#facc15", "circle-stroke-color": "#fff", "circle-stroke-width": 1,},});
+      map.addLayer({id: "lrt1-line", type: "line", source: "transit-route", filter: ["==", ["get", "type"], "LRT1"], layout: { "line-join": "round", "line-cap": "round" }, paint: { "line-color": "#22c55e", "line-width": 4 },});
+      map.addLayer({id: "lrt1-stops", type: "circle", source: "transit-route", filter: ["==", ["get", "type"], "LRT1-Stop"], paint: {"circle-radius": 5, "circle-color": "#16a34a", "circle-stroke-color": "#fff", "circle-stroke-width": 1,},});
+      map.addLayer({id: "lrt2-line", type: "line", source: "transit-route", filter: ["==", ["get", "type"], "LRT2"], layout: { "line-join": "round", "line-cap": "round" }, paint: { "line-color": "#7A07D1", "line-width": 4 },});
+      map.addLayer({id: "lrt2-stops", type: "circle", source: "transit-route", filter: ["==", ["get", "type"], "LRT2-Stop"], paint: {"circle-radius": 5, "circle-color": "#7A07D1", "circle-stroke-color": "#fff", "circle-stroke-width": 1,},});
+      map.addLayer({id: "jeep-lines", type: "line", source: "transit-route", filter: ["==", ["get", "type"], "Jeep"], layout: { "line-join": "round", "line-cap": "round" }, paint: { "line-color": "#FFA500", "line-width": 3 },});
+      map.addLayer({id: "p2p-bus-lines", type: "line", source: "transit-route", filter: ["==", ["get", "type"], "P2P-Bus"], layout: { "line-join": "round", "line-cap": "round" }, paint: { "line-color": "#f97316", "line-width": 3 },});
+      map.addLayer({id: "bus-lines", type: "line", source: "transit-route", filter: ["==", ["get", "type"], "Bus"], layout: { "line-join": "round", "line-cap": "round" }, paint: { "line-color": "#3b82f6", "line-width": 3 },});
+      map.addLayer({id: "bus-stops", type: "circle", source: "transit-route", filter: ["==", ["get", "type"], "Bus-Stop"], paint: {"circle-radius": 5, "circle-color": "#3b82f6", "circle-stroke-color": "#fff", "circle-stroke-width": 1,}})
     });
 
     return () => map.remove();

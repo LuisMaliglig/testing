@@ -11,19 +11,20 @@ import * as turf from "@turf/turf"; // Import turf for bounding box calculation
 // --- Mode Colors and Icons ---
 const modeColors = {
     MRT: "#facc15", // Yellow-400
-    LRT: "#22c55e", // Green-500
+    LRT1: "#22c55e", // Green-500
+    LRT2: "#7A07D1",
     Jeep: "#FFA500", // Orange
     "P2P-Bus": "#f97316", // Orange-500
     Bus: "#3b82f6", // Blue-500
-    Walk: "#9ca3af", // Gray-400 (for dashed line)
-    Driving: "#6b7280", // Gray-500
-    // Add other potential modes if needed
+    Walk: "#9ca3af", // Gray-400
+    Driving: "#6b7280", // Gray-500 
 };
 
 const getModeIcon = (mode = 'Unknown') => { // Added default value
     switch (mode) {
         case 'MRT': return 'train';
-        case 'LRT': return 'tram';
+        case 'LRT1': return 'tram';
+        case 'LRT2': return 'tram';
         case 'Bus':
         case 'P2P-Bus': return 'directions_bus';
         case 'Jeep': return 'airport_shuttle'; // Placeholder
@@ -61,6 +62,10 @@ const RouteBreakdown = () => {
     const [currentSteps, setCurrentSteps] = useState([]); // AWS steps for driving
     const [currentRouteLabel, setCurrentRouteLabel] = useState("Loading...");
     const [currentRouteProps, setCurrentRouteProps] = useState(null); // Properties of selected route
+    // *** RE-ADD isMapLoaded state ***
+    const [isMapLoaded, setIsMapLoaded] = useState(false);
+    // State for map features derived from selected route
+    const [mapFeatures, setMapFeatures] = useState({ type: 'FeatureCollection', features: [] });
 
     // --- Initialize Map ---
     useEffect(() => {
@@ -75,6 +80,8 @@ const RouteBreakdown = () => {
         }
 
         if (!mapContainerRef.current) return;
+        let isMounted = true; // Flag for cleanup check
+
         const map = new maplibregl.Map({
             container: mapContainerRef.current,
             style: `https://maps.geo.${awsConfig.region}.amazonaws.com/maps/v0/maps/${awsConfig.mapName}/style-descriptor?key=${awsConfig.apiKey}`,
@@ -83,34 +90,28 @@ const RouteBreakdown = () => {
         });
         mapRef.current = map;
 
-        map.on('load', () => {
-            if (!mapRef.current) return; // Check map still exists
+        map.once('load', () => { // Use 'once' if setup only needs to happen once
+            if (!mapRef.current || !isMounted) return;
+            console.log("Map 'load' event fired. Setting up sources/layers.");
+            // *** Set map loaded state to true ***
+            setIsMapLoaded(true);
 
-            // --- Setup Source and Layers for Segments ---
+            // Setup Source and Layers for Segments
             if (!mapRef.current.getSource('route-segments')) {
                 mapRef.current.addSource('route-segments', {
                     type: 'geojson',
-                    data: { type: 'FeatureCollection', features: [] } // Initialize empty
+                    data: { type: 'FeatureCollection', features: [] }
                 });
                 console.log("Map source 'route-segments' added.");
-            } else {
-                console.log("Map source 'route-segments' already exists.");
             }
 
-
-            // Define layers for each mode type
             Object.keys(modeColors).forEach(mode => {
                 const layerId = `route-segment-${mode}`;
                 if (!mapRef.current.getLayer(layerId)) {
                     mapRef.current.addLayer({
-                        id: layerId,
-                        type: 'line',
-                        source: 'route-segments',
-                        filter: ['==', ['get', 'mode'], mode], // Filter features by mode property
-                        layout: {
-                            'line-join': 'round',
-                            'line-cap': 'round'
-                        },
+                        id: layerId, type: 'line', source: 'route-segments',
+                        filter: ['==', ['get', 'mode'], mode],
+                        layout: { 'line-join': 'round', 'line-cap': 'round' },
                         paint: {
                             'line-color': modeColors[mode],
                             'line-width': mode === 'Walk' ? 4 : 6,
@@ -118,40 +119,43 @@ const RouteBreakdown = () => {
                             ...(mode === 'Walk' && { 'line-dasharray': [2, 2] })
                         }
                     });
-                    console.log(`Map layer '${layerId}' added.`);
-                } else {
-                     console.log(`Map layer '${layerId}' already exists.`);
                 }
             });
-            // --- End Layer Setup ---
+            console.log("Segment layers added/verified.");
         });
 
         map.on('error', (e) => console.error("MapLibre Error:", e));
 
         return () => {
-            if (mapRef.current) { mapRef.current.remove(); mapRef.current = null; }
+            isMounted = false;
+            if (mapRef.current) {
+                if (mapRef.current.getStyle()) { /* No listeners to remove here */ }
+                mapRef.current.remove();
+                mapRef.current = null;
+            }
         };
-    }, []); // Run map initialization only once
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []); // Map initialization runs once
 
-    // --- Load/Update Route Details When Selection Changes ---
+    // --- Load/Update Route Details (UI State & Prepare Map Features) ---
     useEffect(() => {
         // Basic validation
         if (!Array.isArray(suggestedRoutes) || suggestedRoutes.length === 0) {
-            console.warn("No suggested routes available.");
-            setCurrentSegments([]); setCurrentSteps([]); setCurrentRouteLabel("No routes found."); setCurrentRouteProps(null);
-            if (mapRef.current?.getSource('route-segments')) { mapRef.current.getSource('route-segments').setData({ type: 'FeatureCollection', features: [] }); }
-            return;
-        }
+             console.warn("No suggested routes available.");
+             setCurrentSegments([]); setCurrentSteps([]); setCurrentRouteLabel("No routes found."); setCurrentRouteProps(null);
+             setMapFeatures({ type: 'FeatureCollection', features: [] }); // Clear map features
+             return;
+         }
         if (currentlySelectedIdx < 0 || currentlySelectedIdx >= suggestedRoutes.length) {
-            console.warn(`Selected index ${currentlySelectedIdx} out of bounds. Resetting to 0.`);
-            setCurrentlySelectedIdx(0); return;
+             console.warn(`Selected index ${currentlySelectedIdx} out of bounds. Resetting to 0.`);
+             setCurrentlySelectedIdx(0); return; // Effect will re-run
         }
         const selectedRoute = suggestedRoutes[currentlySelectedIdx];
         if (!selectedRoute?.properties?.segments || !selectedRoute?.properties?.label) {
-            console.error("Selected route object (index " + currentlySelectedIdx + ") is invalid.", selectedRoute);
-            setCurrentSegments([]); setCurrentSteps([]); setCurrentRouteLabel("Invalid route data"); setCurrentRouteProps(null);
-            if (mapRef.current?.getSource('route-segments')) { mapRef.current.getSource('route-segments').setData({ type: 'FeatureCollection', features: [] }); }
-            return;
+             console.error("Selected route object (index " + currentlySelectedIdx + ") is invalid.", selectedRoute);
+             setCurrentSegments([]); setCurrentSteps([]); setCurrentRouteLabel("Invalid route data"); setCurrentRouteProps(null);
+             setMapFeatures({ type: 'FeatureCollection', features: [] }); // Clear map features
+             return;
         }
 
         console.log(`Loading details for index ${currentlySelectedIdx}: ${selectedRoute.properties.label}`);
@@ -169,83 +173,72 @@ const RouteBreakdown = () => {
             setCurrentSteps([]);
         }
 
-        // --- 3. Update Map Data Source with Individual Segments ---
-        const updateMapData = () => {
-             if (!mapRef.current || !mapRef.current.isStyleLoaded()) {
-                  console.log("Map style not ready for data update, will retry...");
-                  // setTimeout(updateMapData, 300); // Consider removing retry or making it safer
-                  return;
-             }
+        // 3. Prepare Features for the Map (update mapFeatures state)
+         const segmentFeatures = selectedRoute.properties.segments
+             .map((seg, index) => {
+                 // console.log(`Checking segment ${index} (mode: ${seg?.mode}):`, JSON.stringify(seg));
+                 // console.log(` -> Geometry object for segment ${index}:`, seg?.geometry);
 
-             // Create a FeatureCollection from the segments array
-             const segmentFeatures = selectedRoute.properties.segments
-                 .map((seg, index) => {
-                     // *** ADDED DEBUG LOG HERE ***
-                     console.log(`Checking segment ${index} (mode: ${seg?.mode}):`, JSON.stringify(seg));
-                     // ***************************
+                 if (seg?.geometry && seg.geometry.type === 'LineString' && Array.isArray(seg.geometry.coordinates) && seg.geometry.coordinates.length >= 2) {
+                     return {
+                         type: 'Feature',
+                         geometry: seg.geometry,
+                         properties: { mode: seg.mode || 'Unknown', label: seg.label, }
+                     };
+                 } else {
+                     console.warn(`Segment ${index} (mode: ${seg?.mode}) has invalid geometry structure or coordinates. Skipping map feature.`);
+                     // console.warn(`   - seg?.geometry exists: ${!!seg?.geometry}`);
+                     // console.warn(`   - seg.geometry.type === 'LineString': ${seg?.geometry?.type === 'LineString'}`);
+                     // console.warn(`   - Array.isArray(seg.geometry.coordinates): ${Array.isArray(seg?.geometry?.coordinates)}`);
+                     // console.warn(`   - seg.geometry.coordinates.length >= 2: ${seg?.geometry?.coordinates?.length >= 2}`);
+                     return null;
+                 }
+             })
+             .filter(feature => feature !== null);
+         setMapFeatures({ type: 'FeatureCollection', features: segmentFeatures });
+         console.log(`Prepared ${segmentFeatures.length} features for map.`);
 
-                     // Validate segment geometry before creating feature
-                     if (seg?.geometry && seg.geometry.type === 'LineString' && Array.isArray(seg.geometry.coordinates) && seg.geometry.coordinates.length >= 2) {
-                         return {
-                             type: 'Feature',
-                             geometry: seg.geometry,
-                             properties: {
-                                 mode: seg.mode || 'Unknown', // Ensure mode property exists for filtering
-                                 label: seg.label,
-                                 // Add any other properties needed for popups or interactions
-                             }
-                         };
-                     } else {
-                         console.warn(`Segment ${index} (mode: ${seg?.mode}) has invalid geometry. Skipping map feature.`);
-                         return null; // Skip segments with invalid geometry
-                     }
-                 })
-                 .filter(feature => feature !== null); // Remove null entries
+    }, [currentlySelectedIdx, suggestedRoutes, awsRouteData]); // Dependencies: Selection and data
 
-             const routeSegmentsGeoJSON = {
-                 type: 'FeatureCollection',
-                 features: segmentFeatures
-             };
 
-             // Update the 'route-segments' source
+    // --- Update Map View (Separate Effect) ---
+    useEffect(() => {
+        // *** Check map instance AND isMapLoaded state ***
+        if (mapRef.current && isMapLoaded && mapRef.current.isStyleLoaded()) {
+             console.log("Map style loaded, attempting map update with features:", mapFeatures.features.length);
              const source = mapRef.current.getSource('route-segments');
              if (source) {
-                  source.setData(routeSegmentsGeoJSON);
-                  console.log(` -> Updated map source 'route-segments' with ${segmentFeatures.length} segment features.`);
-             } else {
-                  console.error("Map source 'route-segments' not found!");
-             }
+                  try {
+                      source.setData(mapFeatures); // Use mapFeatures state
+                      console.log(` -> Updated map source 'route-segments' with ${mapFeatures.features.length} segment features.`);
 
+                      // Fit bounds logic
+                      const selectedRoute = suggestedRoutes[currentlySelectedIdx];
+                      let geometryForBounds = selectedRoute?.geometry; // Prefer combined geometry
+                      if (!geometryForBounds && mapFeatures.features.length > 0) {
+                           try { geometryForBounds = turf.featureCollection(mapFeatures.features); } // Fallback to segments
+                           catch(e) { console.error("Error creating feature collection for bounds:", e); }
+                      }
+                      if (geometryForBounds) {
+                           try {
+                               const bounds = turf.bbox(geometryForBounds);
+                               if (Array.isArray(bounds) && bounds.length === 4 && bounds.every(n => typeof n === 'number' && !isNaN(n))) {
+                                   mapRef.current.fitBounds(bounds, { padding: { top: 60, bottom: 60, left: 380, right: 60 }, maxZoom: 16, duration: 500 });
+                               } else { console.warn("Could not calculate valid bounds.", bounds); }
+                           } catch (e) { console.error("Error fitting bounds:", e); }
+                      } else { console.warn(`No valid geometry found for bounds.`); }
+                  } catch (error) {
+                       console.error("Error setting map source data:", error);
+                  }
 
-             // Fit map to the bounds of the *entire original route geometry* if available,
-             // otherwise fit to the bounds of the generated segments.
-             let geometryForBounds = selectedRoute.geometry; // Prefer top-level combined geometry first
-             if (!geometryForBounds && segmentFeatures.length > 0) {
-                  try { geometryForBounds = turf.featureCollection(segmentFeatures); }
-                  catch(e) { console.error("Error creating feature collection for bounds:", e); }
-             }
+             } else { console.error("Map source 'route-segments' not found during update!"); }
+        } else {
+            // Log why update is skipped
+            console.log(`Map update skipped. Map Ref: ${!!mapRef.current}, isMapLoaded: ${isMapLoaded}, Style Loaded: ${mapRef.current?.isStyleLoaded()}`);
+        }
+    // *** ADD isMapLoaded to dependency array ***
+    }, [mapFeatures, isMapLoaded, currentlySelectedIdx, suggestedRoutes]);
 
-             if (geometryForBounds) {
-                 try {
-                     const bounds = turf.bbox(geometryForBounds);
-                     if (Array.isArray(bounds) && bounds.length === 4 && bounds.every(n => typeof n === 'number' && !isNaN(n))) {
-                         mapRef.current.fitBounds(bounds, {
-                             padding: { top: 60, bottom: 60, left: 380, right: 60 },
-                             maxZoom: 16,
-                             duration: 500
-                         });
-                     } else { console.warn("Could not calculate valid bounds for route geometry:", bounds); }
-                 } catch (e) { console.error("Error calculating or fitting bounds:", e); }
-             } else {
-                  console.warn(`No valid geometry found for route index ${currentlySelectedIdx} to calculate map bounds.`);
-             }
-        };
-
-        // Call the map update function
-        updateMapData();
-        // --- End Map Update ---
-
-    }, [currentlySelectedIdx, suggestedRoutes, awsRouteData]); // Dependencies
 
     // --- Calculate Display Values (same as before) ---
     const getCurrentTotalDurationMin = () => {

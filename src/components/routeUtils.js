@@ -69,7 +69,8 @@ function calculateFare(mode, distanceMeters) {
         case 'Bus':
             return calculateBusFare(distanceKm);
         case 'MRT':
-        case 'LRT':
+        case 'LRT1':
+        case 'LRT2':
             return calculateMRTorLRTFare(distanceKm);
         case 'Walk':
         case 'Driving':
@@ -193,7 +194,11 @@ function estimateSegmentDuration(mode, distanceMeters, isFirstOrLastWalk = false
       speedMps = AVG_P2P_BUS_SPEED_MPS;
        if (!isTransfer) additionalTimeSec = ESTIMATED_TRANSIT_WAIT_TIME_SEC;
       break;
-    case 'LRT':
+    case 'LRT1':
+      speedMps = AVG_LRT_SPEED_MPS;
+       if (!isTransfer) additionalTimeSec = ESTIMATED_TRANSIT_WAIT_TIME_SEC;
+      break;
+    case 'LRT2':
       speedMps = AVG_LRT_SPEED_MPS;
        if (!isTransfer) additionalTimeSec = ESTIMATED_TRANSIT_WAIT_TIME_SEC;
       break;
@@ -240,7 +245,7 @@ function tryBuildTransitRoute(startPoint, endPoint, transitFeatures, allowedLine
 
     // Determine compatible stop types...
     const allowedStopTypes = allowedLineTypes.flatMap(type => {
-         if (type === 'MRT' || type === 'LRT' || type === 'Bus' || type === 'P2P-Bus') { return [`${type}-Stop`]; }
+         if (type === 'MRT' || type === 'LRT1' || type === 'LRT2' || type === 'Bus' || type === 'P2P-Bus') { return [`${type}-Stop`]; }
          return [];
      }).filter(Boolean);
     if (allowedLineTypes.includes('Bus') || allowedLineTypes.includes('P2P-Bus')) { if (!allowedStopTypes.includes('Bus-Stop')) { allowedStopTypes.push('Bus-Stop'); } }
@@ -530,7 +535,8 @@ export function buildSnappedRouteData(awsRouteData, transitFeatures) {
     // --- Attempt to build route for each prioritized mode group ---
     const modesToTry = [
         { types: ['MRT'], label: 'MRT' },
-        { types: ['LRT'], label: 'LRT' },
+        { types: ['LRT1'], label: 'LRT1' },
+        { types: ['LRT2'], label: 'LRT2' },
         { types: ['Bus', 'P2P-Bus'], label: 'Bus' },
         { types: ['Jeep'], label: 'Jeep' }
     ];
@@ -561,23 +567,49 @@ export function buildSnappedRouteData(awsRouteData, transitFeatures) {
 
 
     // --- Refine/Filter Results ---
-    const uniqueOptions = [];
-    const seenLabels = new Set();
-    for (const option of finalRouteOptions) {
-        if (option?.properties?.label) {
-            if (!seenLabels.has(option.properties.label)) {
-                uniqueOptions.push(option);
-                seenLabels.add(option.properties.label);
-            } else {
-                 console.log(`Skipping duplicate route label: ${option.properties.label}`);
-            }
-        } else if (option) {
-             console.warn("Found route option without a label:", option);
+    // MODIFIED: Select Driving, Fastest Transit, and Second Fastest Transit (if different mode)
+    let drivingRoute = null;
+    let transitRoutes = [];
+
+    finalRouteOptions.forEach(option => {
+        if (option?.properties?.primary_mode === 'Driving') {
+            drivingRoute = option;
+        } else if (option?.properties?.primary_mode) { // Check it's a valid transit option
+            transitRoutes.push(option);
+        }
+    });
+
+    // Sort transit routes by duration
+    transitRoutes.sort((a, b) => {
+        const durationA = a?.properties?.summary_duration ?? Infinity;
+        const durationB = b?.properties?.summary_duration ?? Infinity;
+        if (durationA !== durationB) { return durationA - durationB; }
+        const fareA = a?.properties?.total_fare ?? Infinity;
+        const fareB = b?.properties?.total_fare ?? Infinity;
+        return fareA - fareB;
+    });
+
+    // Select the final options
+    let finalSelectedOptions = [];
+    if (drivingRoute) {
+        finalSelectedOptions.push(drivingRoute);
+    }
+    if (transitRoutes.length > 0) {
+        finalSelectedOptions.push(transitRoutes[0]); // Add the fastest transit route
+        // Add the second fastest transit route *if* it exists and has a different primary mode
+        if (transitRoutes.length > 1 && transitRoutes[1].properties.primary_mode !== transitRoutes[0].properties.primary_mode) {
+            finalSelectedOptions.push(transitRoutes[1]);
+        }
+        // *** NEW: Add the third fastest transit route if different mode from first two ***
+        if (transitRoutes.length > 2 &&
+            transitRoutes[2].properties.primary_mode !== transitRoutes[0].properties.primary_mode &&
+            transitRoutes[2].properties.primary_mode !== transitRoutes[1].properties.primary_mode) {
+             finalSelectedOptions.push(transitRoutes[2]);
         }
     }
 
-    // Sort options: Prioritize lower duration, then lower fare
-    uniqueOptions.sort((a, b) => {
+    // Re-sort the final selected list by duration (optional, but good for UI consistency)
+     finalSelectedOptions.sort((a, b) => {
         const durationA = a?.properties?.summary_duration ?? Infinity;
         const durationB = b?.properties?.summary_duration ?? Infinity;
         if (durationA !== durationB) { return durationA - durationB; }
@@ -587,6 +619,7 @@ export function buildSnappedRouteData(awsRouteData, transitFeatures) {
     });
 
 
-    console.log(`buildSnappedRouteData finished. Returning ${uniqueOptions.length} unique options:`, uniqueOptions.map(o=>o?.properties?.label || 'Invalid Label')); // Log labels safely
-    return uniqueOptions;
+    console.log(`buildSnappedRouteData finished. Returning ${finalSelectedOptions.length} selected options:`, finalSelectedOptions.map(o=>o?.properties?.label || 'Invalid Label'));
+    return finalSelectedOptions; // Return the selected list
 }
+
