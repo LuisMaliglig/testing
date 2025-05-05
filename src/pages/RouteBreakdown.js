@@ -1,9 +1,7 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useMemo } from "react"; // Added useMemo
 import { useLocation, useNavigate } from "react-router-dom";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
-// Removed AWS import as it's not directly used here anymore, only config is needed
-// import AWS from "aws-sdk";
 import { awsConfig } from "../config/config"; // Ensure path is correct
 import logo from "../assets/logo.png"; // Ensure path is correct
 import * as turf from "@turf/turf"; // Import turf for bounding box calculation
@@ -12,22 +10,21 @@ import * as turf from "@turf/turf"; // Import turf for bounding box calculation
 const modeColors = {
     MRT: "#facc15", // Yellow-400
     LRT1: "#22c55e", // Green-500
-    LRT2: "#7A07D1",
+    LRT2: "#7A07D1", // Purple
+    LRT: "#22c55e",   // Fallback LRT
     Jeep: "#FFA500", // Orange
     "P2P-Bus": "#f97316", // Orange-500
     Bus: "#3b82f6", // Blue-500
-    Walk: "#9ca3af", // Gray-400
-    Driving: "#6b7280", // Gray-500 
+    Walk: "#9ca3af", // Gray-400 (for dashed line)
+    Driving: "#6b7280", // Gray-500
 };
 
-const getModeIcon = (mode = 'Unknown') => { // Added default value
+const getModeIcon = (mode = 'Unknown') => {
     switch (mode) {
         case 'MRT': return 'train';
-        case 'LRT1': return 'tram';
-        case 'LRT2': return 'tram';
-        case 'Bus':
-        case 'P2P-Bus': return 'directions_bus';
-        case 'Jeep': return 'airport_shuttle'; // Placeholder
+        case 'LRT1': case 'LRT2': case 'LRT': return 'tram';
+        case 'Bus': case 'P2P-Bus': return 'directions_bus';
+        case 'Jeep': return 'airport_shuttle';
         case 'Walk': return 'directions_walk';
         case 'Driving': return 'directions_car';
         default: return 'route';
@@ -41,31 +38,104 @@ const RouteBreakdown = () => {
     const navigate = useNavigate();
     const location = useLocation();
 
-    // Extract state from navigation, provide robust defaults
+    // Extract state from navigation
     const {
         origin = 'Unknown Origin',
         destination = 'Unknown Destination',
-        suggestedRoutes = [], // Default to empty array
+        suggestedRoutes: initialSuggestedRoutes = [], // Rename to avoid conflict
         selectedRouteIndex = 0,
-        awsRouteData = null, // Keep AWS data if needed for driving steps
+        awsRouteData = null,
     } = location.state || {};
 
     // --- State ---
-    const [currentlySelectedIdx, setCurrentlySelectedIdx] = useState(() => {
-        // Ensure initial index is valid
-        if (suggestedRoutes && suggestedRoutes.length > 0 && selectedRouteIndex >= 0 && selectedRouteIndex < suggestedRoutes.length) {
-            return selectedRouteIndex;
-        }
-        return 0; // Default to 0 if initial index is invalid or no routes
-    });
-    const [currentSegments, setCurrentSegments] = useState([]); // Segments for timeline/list display
-    const [currentSteps, setCurrentSteps] = useState([]); // AWS steps for driving
+    // Store the original, unsorted list
+    const [originalRoutes] = useState(initialSuggestedRoutes);
+    // State for sorting criteria
+    const [sortBy, setSortBy] = useState('duration'); // 'duration', 'distance', 'fare'
+    // State for the index of the currently selected route *in the sorted list*
+    const [currentlySelectedIdx, setCurrentlySelectedIdx] = useState(selectedRouteIndex);
+    // State to track the label of the selected route to maintain selection across sorts
+    const [selectedRouteLabelState, setSelectedRouteLabelState] = useState(() =>
+        initialSuggestedRoutes[selectedRouteIndex]?.properties?.label || null
+    );
+
+    // State for the details of the *currently viewed* route
+    const [currentSegments, setCurrentSegments] = useState([]);
+    const [currentSteps, setCurrentSteps] = useState([]);
     const [currentRouteLabel, setCurrentRouteLabel] = useState("Loading...");
-    const [currentRouteProps, setCurrentRouteProps] = useState(null); // Properties of selected route
-    // *** RE-ADD isMapLoaded state ***
-    const [isMapLoaded, setIsMapLoaded] = useState(false);
+    const [currentRouteProps, setCurrentRouteProps] = useState(null);
+    const [isMapLoaded, setIsMapLoaded] = useState(false); // Track map load status
     // State for map features derived from selected route
     const [mapFeatures, setMapFeatures] = useState({ type: 'FeatureCollection', features: [] });
+
+    // --- Sorting Logic ---
+    const sortedSuggestedRoutes = useMemo(() => {
+        if (!Array.isArray(originalRoutes)) return [];
+        // Create a copy before sorting to avoid mutating original state/props
+        const routesToSort = [...originalRoutes];
+
+        routesToSort.sort((a, b) => {
+            const propsA = a?.properties;
+            const propsB = b?.properties;
+            let valA = Infinity, valB = Infinity;
+
+            switch (sortBy) {
+                case 'distance':
+                    valA = propsA?.summary_distance ?? Infinity;
+                    valB = propsB?.summary_distance ?? Infinity;
+                    break;
+                case 'fare':
+                    valA = propsA?.total_fare ?? Infinity;
+                    valB = propsB?.total_fare ?? Infinity;
+                    break;
+                case 'duration':
+                default:
+                    valA = propsA?.summary_duration ?? Infinity;
+                    valB = propsB?.summary_duration ?? Infinity;
+                    break;
+            }
+            // Handle potential non-numeric values safely
+            if (isNaN(valA)) valA = Infinity;
+            if (isNaN(valB)) valB = Infinity;
+
+            if (valA !== valB) {
+                 return valA - valB; // Primary sort
+            }
+            // Secondary sort by duration if primary values are equal
+            const durationA = propsA?.summary_duration ?? Infinity;
+            const durationB = propsB?.summary_duration ?? Infinity;
+             if (isNaN(durationA)) durationA = Infinity;
+             if (isNaN(durationB)) durationB = Infinity;
+            return durationA - durationB;
+        });
+        return routesToSort;
+    }, [originalRoutes, sortBy]);
+
+    // --- Effect to update index when sort changes ---
+    useEffect(() => {
+        if (selectedRouteLabelState) {
+            const newIndex = sortedSuggestedRoutes.findIndex(route => route?.properties?.label === selectedRouteLabelState);
+            if (newIndex !== -1 && newIndex !== currentlySelectedIdx) {
+                console.log(`Sort changed. Updating selected index for label "${selectedRouteLabelState}" from ${currentlySelectedIdx} to ${newIndex}`);
+                setCurrentlySelectedIdx(newIndex);
+            } else if (newIndex === -1 && sortedSuggestedRoutes.length > 0) { // Check length before accessing index 0
+                // Previously selected route might not exist after filtering/sorting? Reset.
+                console.warn(`Previously selected route label "${selectedRouteLabelState}" not found after sorting. Resetting index.`);
+                setCurrentlySelectedIdx(0); // Default to first item
+                setSelectedRouteLabelState(sortedSuggestedRoutes[0]?.properties?.label || null); // Update label state
+            } else if (newIndex === -1 && sortedSuggestedRoutes.length === 0) {
+                 // Handle case where sorting results in empty list
+                 setCurrentlySelectedIdx(0); // Or -1?
+                 setSelectedRouteLabelState(null);
+            }
+        } else if (sortedSuggestedRoutes.length > 0) {
+             // If no label was selected, default to the first item in the newly sorted list
+             setCurrentlySelectedIdx(0);
+             setSelectedRouteLabelState(sortedSuggestedRoutes[0]?.properties?.label || null);
+        }
+    // Avoid infinite loops by ensuring currentlySelectedIdx is only set when necessary
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [sortedSuggestedRoutes, selectedRouteLabelState]); // Removed currentlySelectedIdx dependency
 
     // --- Initialize Map ---
     useEffect(() => {
@@ -93,7 +163,7 @@ const RouteBreakdown = () => {
         map.once('load', () => { // Use 'once' if setup only needs to happen once
             if (!mapRef.current || !isMounted) return;
             console.log("Map 'load' event fired. Setting up sources/layers.");
-            // *** Set map loaded state to true ***
+            // Set map loaded state to true
             setIsMapLoaded(true);
 
             // Setup Source and Layers for Segments
@@ -139,28 +209,30 @@ const RouteBreakdown = () => {
 
     // --- Load/Update Route Details (UI State & Prepare Map Features) ---
     useEffect(() => {
-        // Basic validation
-        if (!Array.isArray(suggestedRoutes) || suggestedRoutes.length === 0) {
+        // Use sortedSuggestedRoutes here
+        if (!Array.isArray(sortedSuggestedRoutes) || sortedSuggestedRoutes.length === 0) {
              console.warn("No suggested routes available.");
              setCurrentSegments([]); setCurrentSteps([]); setCurrentRouteLabel("No routes found."); setCurrentRouteProps(null);
-             setMapFeatures({ type: 'FeatureCollection', features: [] }); // Clear map features
-             return;
+             setMapFeatures({ type: 'FeatureCollection', features: [] }); return;
          }
-        if (currentlySelectedIdx < 0 || currentlySelectedIdx >= suggestedRoutes.length) {
-             console.warn(`Selected index ${currentlySelectedIdx} out of bounds. Resetting to 0.`);
-             setCurrentlySelectedIdx(0); return; // Effect will re-run
+        if (currentlySelectedIdx < 0 || currentlySelectedIdx >= sortedSuggestedRoutes.length) {
+             console.warn(`Selected index ${currentlySelectedIdx} out of bounds. List length: ${sortedSuggestedRoutes.length}. Resetting.`);
+             // Reset to 0 only if list is not empty
+             setCurrentlySelectedIdx(sortedSuggestedRoutes.length > 0 ? 0 : -1); // Use -1 or 0?
+             return;
         }
-        const selectedRoute = suggestedRoutes[currentlySelectedIdx];
+        const selectedRoute = sortedSuggestedRoutes[currentlySelectedIdx]; // Get from sorted list
+
         if (!selectedRoute?.properties?.segments || !selectedRoute?.properties?.label) {
              console.error("Selected route object (index " + currentlySelectedIdx + ") is invalid.", selectedRoute);
              setCurrentSegments([]); setCurrentSteps([]); setCurrentRouteLabel("Invalid route data"); setCurrentRouteProps(null);
-             setMapFeatures({ type: 'FeatureCollection', features: [] }); // Clear map features
-             return;
+             setMapFeatures({ type: 'FeatureCollection', features: [] }); return;
         }
 
-        console.log(`Loading details for index ${currentlySelectedIdx}: ${selectedRoute.properties.label}`);
+        console.log(`Loading details for sorted index ${currentlySelectedIdx}: ${selectedRoute.properties.label}`);
         setCurrentRouteLabel(selectedRoute.properties.label);
         setCurrentRouteProps(selectedRoute.properties);
+        // Don't set selectedRouteLabelState here, it's handled by onClick and the sync effect
 
         // 1. Update Segments state for UI
         const segmentsForUI = selectedRoute.properties.segments.filter(seg => seg && typeof seg.mode === 'string');
@@ -187,10 +259,6 @@ const RouteBreakdown = () => {
                      };
                  } else {
                      console.warn(`Segment ${index} (mode: ${seg?.mode}) has invalid geometry structure or coordinates. Skipping map feature.`);
-                     // console.warn(`   - seg?.geometry exists: ${!!seg?.geometry}`);
-                     // console.warn(`   - seg.geometry.type === 'LineString': ${seg?.geometry?.type === 'LineString'}`);
-                     // console.warn(`   - Array.isArray(seg.geometry.coordinates): ${Array.isArray(seg?.geometry?.coordinates)}`);
-                     // console.warn(`   - seg.geometry.coordinates.length >= 2: ${seg?.geometry?.coordinates?.length >= 2}`);
                      return null;
                  }
              })
@@ -198,49 +266,82 @@ const RouteBreakdown = () => {
          setMapFeatures({ type: 'FeatureCollection', features: segmentFeatures });
          console.log(`Prepared ${segmentFeatures.length} features for map.`);
 
-    }, [currentlySelectedIdx, suggestedRoutes, awsRouteData]); // Dependencies: Selection and data
+    }, [currentlySelectedIdx, sortedSuggestedRoutes, awsRouteData]); // Depends on index and the *sorted* list
 
 
-    // --- Update Map View (Separate Effect) ---
+    // --- Update Map View (Separate Effect - Uses requestAnimationFrame) ---
     useEffect(() => {
-        // *** Check map instance AND isMapLoaded state ***
-        if (mapRef.current && isMapLoaded && mapRef.current.isStyleLoaded()) {
-             console.log("Map style loaded, attempting map update with features:", mapFeatures.features.length);
-             const source = mapRef.current.getSource('route-segments');
-             if (source) {
-                  try {
-                      source.setData(mapFeatures); // Use mapFeatures state
-                      console.log(` -> Updated map source 'route-segments' with ${mapFeatures.features.length} segment features.`);
-
-                      // Fit bounds logic
-                      const selectedRoute = suggestedRoutes[currentlySelectedIdx];
-                      let geometryForBounds = selectedRoute?.geometry; // Prefer combined geometry
-                      if (!geometryForBounds && mapFeatures.features.length > 0) {
-                           try { geometryForBounds = turf.featureCollection(mapFeatures.features); } // Fallback to segments
-                           catch(e) { console.error("Error creating feature collection for bounds:", e); }
-                      }
-                      if (geometryForBounds) {
-                           try {
-                               const bounds = turf.bbox(geometryForBounds);
-                               if (Array.isArray(bounds) && bounds.length === 4 && bounds.every(n => typeof n === 'number' && !isNaN(n))) {
-                                   mapRef.current.fitBounds(bounds, { padding: { top: 60, bottom: 60, left: 380, right: 60 }, maxZoom: 16, duration: 500 });
-                               } else { console.warn("Could not calculate valid bounds.", bounds); }
-                           } catch (e) { console.error("Error fitting bounds:", e); }
-                      } else { console.warn(`No valid geometry found for bounds.`); }
-                  } catch (error) {
-                       console.error("Error setting map source data:", error);
-                  }
-
-             } else { console.error("Map source 'route-segments' not found during update!"); }
-        } else {
-            // Log why update is skipped
-            console.log(`Map update skipped. Map Ref: ${!!mapRef.current}, isMapLoaded: ${isMapLoaded}, Style Loaded: ${mapRef.current?.isStyleLoaded()}`);
+        // Exit if map isn't loaded or features haven't been prepared
+        if (!isMapLoaded || !mapRef.current) {
+            console.log(`Map update skipped: Map not ready (isMapLoaded: ${isMapLoaded}, mapRef: ${!!mapRef.current})`);
+            return;
         }
-    // *** ADD isMapLoaded to dependency array ***
-    }, [mapFeatures, isMapLoaded, currentlySelectedIdx, suggestedRoutes]);
+
+        let animationFrameId = null; // To cancel pending frame requests
+
+        // Define the action to perform the map update
+        const performMapUpdate = () => {
+            // Double-check map instance existence within the frame callback
+            if (!mapRef.current) {
+                console.log("Map update cancelled: Map reference lost.");
+                return;
+            }
+
+            // Check if the style is loaded NOW
+            if (mapRef.current.isStyleLoaded()) {
+                console.log("Map style IS loaded, attempting map update with features:", mapFeatures.features.length);
+                const source = mapRef.current.getSource('route-segments');
+                if (source) {
+                    try {
+                        source.setData(mapFeatures); // Use mapFeatures state
+                        console.log(` -> Updated map source 'route-segments' with ${mapFeatures.features.length} segment features.`);
+
+                        // Fit bounds logic
+                        // Get the selected route from the *sorted* list using the current index
+                        const selectedRoute = sortedSuggestedRoutes[currentlySelectedIdx];
+                        let geometryForBounds = selectedRoute?.geometry; // Prefer combined geometry
+                        if (!geometryForBounds && mapFeatures.features.length > 0) {
+                             try { geometryForBounds = turf.featureCollection(mapFeatures.features); } // Fallback to segments
+                             catch(e) { console.error("Error creating feature collection for bounds:", e); }
+                        }
+                        if (geometryForBounds) {
+                             try {
+                                 const bounds = turf.bbox(geometryForBounds);
+                                 if (Array.isArray(bounds) && bounds.length === 4 && bounds.every(n => typeof n === 'number' && !isNaN(n))) {
+                                     mapRef.current.fitBounds(bounds, { padding: { top: 60, bottom: 60, left: 380, right: 60 }, maxZoom: 16, duration: 500 });
+                                 } else { console.warn("Could not calculate valid bounds.", bounds); }
+                             } catch (e) { console.error("Error fitting bounds:", e); }
+                        } else { console.warn(`No valid geometry found for bounds.`); }
+                    } catch (error) {
+                         console.error("Error setting map source data:", error);
+                    }
+                } else { console.error("Map source 'route-segments' not found during update!"); }
+            } else {
+                // Style not loaded yet, request another frame
+                console.log("Map style still not loaded, requesting next animation frame.");
+                animationFrameId = requestAnimationFrame(performMapUpdate);
+            }
+        };
+
+        // Request the first animation frame to start the update process
+        console.log("Requesting animation frame for map update.");
+        animationFrameId = requestAnimationFrame(performMapUpdate);
+
+        // Cleanup function to cancel the frame request if the component unmounts
+        // or if the dependencies change before the frame runs
+        return () => {
+            if (animationFrameId) {
+                console.log("Cancelling pending animation frame for map update.");
+                cancelAnimationFrame(animationFrameId);
+            }
+        };
+
+    // Depend on mapFeatures and isMapLoaded. Also include currentlySelectedIdx/sortedSuggestedRoutes
+    // to ensure fitBounds uses the correct data if mapFeatures changes structurally but not content-wise.
+    }, [mapFeatures, isMapLoaded, currentlySelectedIdx, sortedSuggestedRoutes]);
 
 
-    // --- Calculate Display Values (same as before) ---
+    // --- Calculate Display Values ---
     const getCurrentTotalDurationMin = () => {
         const durationSec = currentRouteProps?.summary_duration;
         return typeof durationSec === 'number' && !isNaN(durationSec) ? (durationSec / 60).toFixed(0) : 'N/A';
@@ -250,8 +351,14 @@ const RouteBreakdown = () => {
         return typeof fare === 'number' && !isNaN(fare) ? `P${fare.toFixed(2)}` : '';
     };
 
+    // --- Event Handler for Sort Change ---
+    const handleSortChange = (event) => {
+        setSortBy(event.target.value);
+        // The index sync effect will handle updating currentlySelectedIdx
+    };
 
-    // --- JSX Return (Structure remains the same) ---
+
+    // --- JSX Return ---
     return (
         <div style={{ position: "relative", height: "100vh", fontFamily: "Montserrat, sans-serif" }}>
             {/* Sidebar */}
@@ -270,7 +377,7 @@ const RouteBreakdown = () => {
                            padding: "8px 12px", backgroundColor: "#1e40af", color: "#fff",
                            border: "none", borderRadius: "5px", cursor: "pointer", fontFamily: "Montserrat, sans-serif", fontSize: '0.9rem'
                        }}>
-                           Back to Options
+                           Back to Navigation
                        </button>
                    </div>
 
@@ -282,12 +389,38 @@ const RouteBreakdown = () => {
                            From <strong>{origin}</strong> to <strong>{destination}</strong>
                        </p>
 
-                       {/* Route Options List */}
+                       {/* --- Sort Dropdown --- */}
+                       <div style={{ marginBottom: '15px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                            <label htmlFor="sort-select" style={{ fontSize: '0.9rem', fontWeight: '600' }}>Sort by:</label>
+                            <select
+                                id="sort-select"
+                                value={sortBy}
+                                onChange={handleSortChange}
+                                style={{
+                                    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                                    color: 'black',
+                                    border: '1px solid rgba(255, 255, 255, 0.3)',
+                                    borderRadius: '4px',
+                                    padding: '5px 8px',
+                                    fontSize: '0.85rem',
+                                    flexGrow: 1 // Allow it to take space
+                                }}
+                            >
+                                <option value="duration">Fastest</option>
+                                <option value="distance">Shortest Distance</option>
+                                <option value="fare">Cheapest</option>
+                            </select>
+                       </div>
+                       {/* --- End Sort Dropdown --- */}
+
+
+                       {/* Route Options List (Maps over sortedSuggestedRoutes) */}
                        <div style={{ marginBottom: '20px' }}>
                            <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-                               {(Array.isArray(suggestedRoutes) && suggestedRoutes.length > 0) ? (
-                                   suggestedRoutes.map((route, index) => {
+                               {(Array.isArray(sortedSuggestedRoutes) && sortedSuggestedRoutes.length > 0) ? (
+                                   sortedSuggestedRoutes.map((route, index) => { // Use sorted list
                                        if (!route?.properties?.label) { return <li key={`invalid-${index}`} style={{ color: 'red', padding: '5px' }}>Invalid route data</li>; }
+                                       // Check selection based on index *in the sorted list*
                                        const isSelected = index === currentlySelectedIdx;
                                        const label = route.properties.label;
                                        const durationMin = route.properties.summary_duration ? (route.properties.summary_duration / 60).toFixed(0) : '?';
@@ -295,8 +428,12 @@ const RouteBreakdown = () => {
                                        const fareString = typeof fare === 'number' ? `P${fare.toFixed(2)}` : '';
                                        return (
                                            <li
-                                               key={label + index}
-                                               onClick={() => setCurrentlySelectedIdx(index)}
+                                               key={label + index} // Key should ideally be more stable if possible
+                                               onClick={() => {
+                                                   // Set both index and label on click
+                                                   setCurrentlySelectedIdx(index);
+                                                   setSelectedRouteLabelState(label);
+                                               }}
                                                style={{
                                                    border: `2px solid ${isSelected ? '#6ee7b7' : 'rgba(255,255,255,0.2)'}`,
                                                    backgroundColor: isSelected ? "rgba(110, 231, 183, 0.2)" : "rgba(255, 255, 255, 0.1)",

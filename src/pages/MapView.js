@@ -573,7 +573,7 @@ const MapView = () => {
 
       {/* Legend */}
       <div style={{
-          position: "absolute", top: "-5px", right: "16px", backgroundColor: "rgba(0, 0, 0, 0.8)",
+          position: "absolute", top: "-5px", right: "50px", backgroundColor: "rgba(0, 0, 0, 0.8)",
           color: "white", padding: "10px 12px", borderRadius: "6px", zIndex: 10, boxShadow: "0 2px 4px rgba(0, 0, 0, 0.4)", fontSize: '1rem'
       }}>
           <h4 style={{ marginBottom: "8px", fontWeight: "bold", textAlign: "center", marginTop: 0, fontSize: '1rem' }}>Legend</h4>

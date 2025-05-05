@@ -81,6 +81,50 @@
     {
       "type": "Feature",
       "properties": {
+        "type": "P2P-Bus-Stop",
+        "name": "Market Market"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [121.055329, 14.547778]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "type": "P2P-Bus-Stop",
+        "name": "Alabang Terminal"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [121.046033, 14.415531]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "type": "P2P-Bus-Stop",
+        "name": "Market Market"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [121.055480, 14.548221]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "type": "P2P-Bus-Stop",
+        "name": "Alabang Terminal"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [121.045944, 14.415551]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
         "name": "Alabang to BGC Bus",
         "type": "P2P-Bus"
       },
