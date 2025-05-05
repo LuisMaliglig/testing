@@ -16,7 +16,6 @@ const modeColors = {
     Jeep: "#FFA500", // Orange
     "P2P-Bus": "#f97316", // Orange-500
     Bus: "#3b82f6", // Blue-500
-    // Walk/Driving colors not needed for layers here
 };
 
 // Define coordinates for hardcoded route button
