@@ -1,10 +1,11 @@
-import React, { useEffect, useState, useRef, useMemo } from "react"; // Added useMemo
+import React, { useEffect, useState, useRef, useMemo, useCallback } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { awsConfig } from "../config/config"; // Ensure path is correct
 import logo from "../assets/logo.png"; // Ensure path is correct
 import * as turf from "@turf/turf"; // Import turf for bounding box calculation
+import transitRouteData from "../data/transit-lines.json"; // Import the full data for stop lookups
 
 // --- Mode Colors and Icons ---
 const modeColors = {
@@ -17,6 +18,12 @@ const modeColors = {
     Bus: "#3b82f6", // Blue-500
     Walk: "#9ca3af", // Gray-400 (for dashed line)
     Driving: "#6b7280", // Gray-500
+    // Stop colors (can be same or different)
+    "MRT-Stop": "#facc15",
+    "LRT1-Stop": "#22c55e",
+    "LRT2-Stop": "#7A07D1",
+    "Bus-Stop": "#3b82f6",
+    "P2P-Bus-Stop": "#f97316",
 };
 
 const getModeIcon = (mode = 'Unknown') => {
@@ -35,6 +42,7 @@ const getModeIcon = (mode = 'Unknown') => {
 const RouteBreakdown = () => {
     const mapContainerRef = useRef(null);
     const mapRef = useRef(null);
+    const stopMarkersRef = useRef([]); // Ref to store current stop markers
     const navigate = useNavigate();
     const location = useLocation();
 
@@ -67,6 +75,8 @@ const RouteBreakdown = () => {
     const [isMapLoaded, setIsMapLoaded] = useState(false); // Track map load status
     // State for map features derived from selected route
     const [mapFeatures, setMapFeatures] = useState({ type: 'FeatureCollection', features: [] });
+    // *** NEW: State to track expanded segment ***
+    const [expandedSegmentIndex, setExpandedSegmentIndex] = useState(null);
 
     // --- Sorting Logic ---
     const sortedSuggestedRoutes = useMemo(() => {
@@ -102,8 +112,8 @@ const RouteBreakdown = () => {
                  return valA - valB; // Primary sort
             }
             // Secondary sort by duration if primary values are equal
-            const durationA = propsA?.summary_duration ?? Infinity;
-            const durationB = propsB?.summary_duration ?? Infinity;
+            let durationA = propsA?.summary_duration ?? Infinity;
+            let durationB = propsB?.summary_duration ?? Infinity;
              if (isNaN(durationA)) durationA = Infinity;
              if (isNaN(durationB)) durationB = Infinity;
             return durationA - durationB;
@@ -136,6 +146,12 @@ const RouteBreakdown = () => {
     // Avoid infinite loops by ensuring currentlySelectedIdx is only set when necessary
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [sortedSuggestedRoutes, selectedRouteLabelState]); // Removed currentlySelectedIdx dependency
+
+    // --- Function to clear stop markers ---
+    const clearStopMarkers = useCallback(() => {
+        stopMarkersRef.current.forEach(marker => marker.remove());
+        stopMarkersRef.current = [];
+    }, []); // No dependencies needed
 
     // --- Initialize Map ---
     useEffect(() => {
@@ -183,7 +199,7 @@ const RouteBreakdown = () => {
                         filter: ['==', ['get', 'mode'], mode],
                         layout: { 'line-join': 'round', 'line-cap': 'round' },
                         paint: {
-                            'line-color': modeColors[mode],
+                            'line-color': modeColors[mode] || '#888', // Fallback color
                             'line-width': mode === 'Walk' ? 4 : 6,
                             'line-opacity': 0.85,
                             ...(mode === 'Walk' && { 'line-dasharray': [2, 2] })
@@ -203,6 +219,7 @@ const RouteBreakdown = () => {
                 mapRef.current.remove();
                 mapRef.current = null;
             }
+            clearStopMarkers(); // Clear markers on unmount
         };
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []); // Map initialization runs once
@@ -215,13 +232,14 @@ const RouteBreakdown = () => {
              setCurrentSegments([]); setCurrentSteps([]); setCurrentRouteLabel("No routes found."); setCurrentRouteProps(null);
              setMapFeatures({ type: 'FeatureCollection', features: [] }); return;
          }
+        // Use currentlySelectedIdx which is synced with sorted list
         if (currentlySelectedIdx < 0 || currentlySelectedIdx >= sortedSuggestedRoutes.length) {
              console.warn(`Selected index ${currentlySelectedIdx} out of bounds. List length: ${sortedSuggestedRoutes.length}. Resetting.`);
              // Reset to 0 only if list is not empty
              setCurrentlySelectedIdx(sortedSuggestedRoutes.length > 0 ? 0 : -1); // Use -1 or 0?
              return;
         }
-        const selectedRoute = sortedSuggestedRoutes[currentlySelectedIdx]; // Get from sorted list
+        const selectedRoute = sortedSuggestedRoutes[currentlySelectedIdx];
 
         if (!selectedRoute?.properties?.segments || !selectedRoute?.properties?.label) {
              console.error("Selected route object (index " + currentlySelectedIdx + ") is invalid.", selectedRoute);
@@ -265,80 +283,104 @@ const RouteBreakdown = () => {
              .filter(feature => feature !== null);
          setMapFeatures({ type: 'FeatureCollection', features: segmentFeatures });
          console.log(`Prepared ${segmentFeatures.length} features for map.`);
+         // Reset expanded segment when route changes
+         setExpandedSegmentIndex(null);
+         // Clear old stop markers when route changes (will be added back if segment expanded)
+         clearStopMarkers();
 
-    }, [currentlySelectedIdx, sortedSuggestedRoutes, awsRouteData]); // Depends on index and the *sorted* list
+    }, [currentlySelectedIdx, sortedSuggestedRoutes, awsRouteData, clearStopMarkers]); // Added clearStopMarkers
 
 
-    // --- Update Map View (Separate Effect - Uses requestAnimationFrame) ---
+    // --- Function to add stop markers ---
+    const addStopMarkers = useCallback((stopSequence) => {
+        if (!mapRef.current || !Array.isArray(stopSequence)) return;
+        clearStopMarkers(); // Clear existing markers first
+
+        // Find the corresponding stop features from the main transit data
+        const stopFeatures = stopSequence.map(stopName =>
+            transitRouteData.features.find(f =>
+                f.geometry?.type === 'Point' && f.properties?.name === stopName
+            )
+        ).filter(Boolean); // Filter out any stops not found in the main data
+
+        stopFeatures.forEach((stopFeature, index) => {
+            const el = document.createElement('div');
+            el.className = 'stop-marker';
+            // Determine color based on stop type, fallback to gray
+            const stopTypeColor = modeColors[stopFeature.properties.type] || '#888';
+            el.style.backgroundColor = stopTypeColor;
+            el.style.width = '12px';
+            el.style.height = '12px';
+            el.style.borderRadius = '50%';
+            el.style.border = '2px solid white';
+            el.style.boxShadow = '0 0 5px rgba(0,0,0,0.5)';
+            el.style.cursor = 'pointer';
+            el.title = `${index + 1}. ${stopFeature.properties.name}`; // Add tooltip
+
+            const marker = new maplibregl.Marker(el)
+                .setLngLat(stopFeature.geometry.coordinates)
+                .addTo(mapRef.current);
+            stopMarkersRef.current.push(marker); // Store reference for removal
+        });
+        console.log(`Added ${stopMarkersRef.current.length} stop markers to map.`);
+    }, [clearStopMarkers]); // Dependency on clearStopMarkers
+
+    // --- Update Map View (Route Lines) ---
     useEffect(() => {
-        // Exit if map isn't loaded or features haven't been prepared
-        if (!isMapLoaded || !mapRef.current) {
-            console.log(`Map update skipped: Map not ready (isMapLoaded: ${isMapLoaded}, mapRef: ${!!mapRef.current})`);
-            return;
+        if (!isMapLoaded || !mapRef.current) { return; }
+        let animationFrameId = null;
+        const performMapUpdate = () => {
+            if (!mapRef.current?.isStyleLoaded()) {
+                animationFrameId = requestAnimationFrame(performMapUpdate); return;
+            }
+            const source = mapRef.current.getSource('route-segments');
+            if (source) {
+                try {
+                    source.setData(mapFeatures);
+                    const selectedRoute = sortedSuggestedRoutes[currentlySelectedIdx];
+                    let geometryForBounds = selectedRoute?.geometry;
+                    if (!geometryForBounds && mapFeatures.features.length > 0) {
+                         try { geometryForBounds = turf.featureCollection(mapFeatures.features); } catch(e) { /* ignore */ }
+                    }
+                    if (geometryForBounds) {
+                         try {
+                             const bounds = turf.bbox(geometryForBounds);
+                             if (Array.isArray(bounds) && bounds.length === 4 && bounds.every(n => typeof n === 'number' && !isNaN(n))) {
+                                 mapRef.current.fitBounds(bounds, { padding: { top: 60, bottom: 60, left: 380, right: 60 }, maxZoom: 16, duration: 500 });
+                             }
+                         } catch (e) { console.error("Error fitting bounds:", e); }
+                    }
+                } catch (error) { console.error("Error setting map source data:", error); }
+            } else { console.error("Map source 'route-segments' not found during update!"); }
+        };
+        animationFrameId = requestAnimationFrame(performMapUpdate);
+        return () => { if (animationFrameId) { cancelAnimationFrame(animationFrameId); } };
+    }, [mapFeatures, isMapLoaded, currentlySelectedIdx, sortedSuggestedRoutes]);
+
+
+    // --- Effect to handle stop markers when segment expands/collapses ---
+    useEffect(() => {
+        if (!isMapLoaded || !mapRef.current || !mapRef.current.isStyleLoaded()) {
+            // console.log("Map not ready for stop marker update");
+            return; // Ensure map is ready
         }
 
-        let animationFrameId = null; // To cancel pending frame requests
-
-        // Define the action to perform the map update
-        const performMapUpdate = () => {
-            // Double-check map instance existence within the frame callback
-            if (!mapRef.current) {
-                console.log("Map update cancelled: Map reference lost.");
-                return;
-            }
-
-            // Check if the style is loaded NOW
-            if (mapRef.current.isStyleLoaded()) {
-                console.log("Map style IS loaded, attempting map update with features:", mapFeatures.features.length);
-                const source = mapRef.current.getSource('route-segments');
-                if (source) {
-                    try {
-                        source.setData(mapFeatures); // Use mapFeatures state
-                        console.log(` -> Updated map source 'route-segments' with ${mapFeatures.features.length} segment features.`);
-
-                        // Fit bounds logic
-                        // Get the selected route from the *sorted* list using the current index
-                        const selectedRoute = sortedSuggestedRoutes[currentlySelectedIdx];
-                        let geometryForBounds = selectedRoute?.geometry; // Prefer combined geometry
-                        if (!geometryForBounds && mapFeatures.features.length > 0) {
-                             try { geometryForBounds = turf.featureCollection(mapFeatures.features); } // Fallback to segments
-                             catch(e) { console.error("Error creating feature collection for bounds:", e); }
-                        }
-                        if (geometryForBounds) {
-                             try {
-                                 const bounds = turf.bbox(geometryForBounds);
-                                 if (Array.isArray(bounds) && bounds.length === 4 && bounds.every(n => typeof n === 'number' && !isNaN(n))) {
-                                     mapRef.current.fitBounds(bounds, { padding: { top: 60, bottom: 60, left: 380, right: 60 }, maxZoom: 16, duration: 500 });
-                                 } else { console.warn("Could not calculate valid bounds.", bounds); }
-                             } catch (e) { console.error("Error fitting bounds:", e); }
-                        } else { console.warn(`No valid geometry found for bounds.`); }
-                    } catch (error) {
-                         console.error("Error setting map source data:", error);
-                    }
-                } else { console.error("Map source 'route-segments' not found during update!"); }
+        if (expandedSegmentIndex !== null && currentSegments[expandedSegmentIndex]) {
+            const segment = currentSegments[expandedSegmentIndex];
+            // Use the fullStopSequence property which should now exist
+            if (Array.isArray(segment.fullStopSequence) && segment.fullStopSequence.length > 0) {
+                console.log("Adding markers for stops:", segment.fullStopSequence);
+                addStopMarkers(segment.fullStopSequence);
             } else {
-                // Style not loaded yet, request another frame
-                console.log("Map style still not loaded, requesting next animation frame.");
-                animationFrameId = requestAnimationFrame(performMapUpdate);
+                console.log("No stop sequence found for expanded segment, clearing markers.");
+                clearStopMarkers(); // Clear if no sequence found
             }
-        };
-
-        // Request the first animation frame to start the update process
-        console.log("Requesting animation frame for map update.");
-        animationFrameId = requestAnimationFrame(performMapUpdate);
-
-        // Cleanup function to cancel the frame request if the component unmounts
-        // or if the dependencies change before the frame runs
-        return () => {
-            if (animationFrameId) {
-                console.log("Cancelling pending animation frame for map update.");
-                cancelAnimationFrame(animationFrameId);
-            }
-        };
-
-    // Depend on mapFeatures and isMapLoaded. Also include currentlySelectedIdx/sortedSuggestedRoutes
-    // to ensure fitBounds uses the correct data if mapFeatures changes structurally but not content-wise.
-    }, [mapFeatures, isMapLoaded, currentlySelectedIdx, sortedSuggestedRoutes]);
+        } else {
+            // console.log("No segment expanded, clearing markers.");
+            clearStopMarkers(); // Clear markers when no segment is expanded
+        }
+        // Cleanup function is implicitly handled by the next run or component unmount
+    }, [expandedSegmentIndex, currentSegments, isMapLoaded, addStopMarkers, clearStopMarkers]); // Rerun when expanded segment changes
 
 
     // --- Calculate Display Values ---
@@ -352,9 +394,11 @@ const RouteBreakdown = () => {
     };
 
     // --- Event Handler for Sort Change ---
-    const handleSortChange = (event) => {
-        setSortBy(event.target.value);
-        // The index sync effect will handle updating currentlySelectedIdx
+    const handleSortChange = (event) => { setSortBy(event.target.value); };
+
+    // --- Handler for clicking a segment ---
+    const handleSegmentClick = (index) => {
+        setExpandedSegmentIndex(prevIndex => prevIndex === index ? null : index); // Toggle expansion
     };
 
 
@@ -377,7 +421,7 @@ const RouteBreakdown = () => {
                            padding: "8px 12px", backgroundColor: "#1e40af", color: "#fff",
                            border: "none", borderRadius: "5px", cursor: "pointer", fontFamily: "Montserrat, sans-serif", fontSize: '0.9rem'
                        }}>
-                           Back to Navigation
+                           Back to Options
                        </button>
                    </div>
 
@@ -389,67 +433,43 @@ const RouteBreakdown = () => {
                            From <strong>{origin}</strong> to <strong>{destination}</strong>
                        </p>
 
-                       {/* --- Sort Dropdown --- */}
+                       {/* Sort Dropdown */}
                        <div style={{ marginBottom: '15px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                            <label htmlFor="sort-select" style={{ fontSize: '0.9rem', fontWeight: '600' }}>Sort by:</label>
+                            <label htmlFor="sort-select" style={{ fontSize: '0.9rem', fontWeight: '600', color: '#d1d5db' }}>Sort by:</label>
                             <select
-                                id="sort-select"
-                                value={sortBy}
-                                onChange={handleSortChange}
-                                style={{
-                                    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-                                    color: 'black',
-                                    border: '1px solid rgba(255, 255, 255, 0.3)',
-                                    borderRadius: '4px',
-                                    padding: '5px 8px',
-                                    fontSize: '0.85rem',
-                                    flexGrow: 1 // Allow it to take space
-                                }}
-                            >
-                                <option value="duration">Fastest</option>
-                                <option value="distance">Shortest Distance</option>
-                                <option value="fare">Cheapest</option>
+                                id="sort-select" value={sortBy} onChange={handleSortChange}
+                                style={{ backgroundColor: 'rgba(255, 255, 255, 0.1)', color: 'white', /* Changed select text to white */
+                                         border: '1px solid rgba(255, 255, 255, 0.3)', borderRadius: '4px', padding: '5px 8px',
+                                         fontSize: '0.85rem', flexGrow: 1 }} >
+                                <option style={{ color: 'black', backgroundColor: 'white' }} value="duration">Fastest</option>
+                                <option style={{ color: 'black', backgroundColor: 'white' }} value="distance">Shortest Distance</option>
+                                <option style={{ color: 'black', backgroundColor: 'white' }} value="fare">Cheapest</option>
                             </select>
                        </div>
-                       {/* --- End Sort Dropdown --- */}
 
-
-                       {/* Route Options List (Maps over sortedSuggestedRoutes) */}
+                       {/* Route Options List */}
                        <div style={{ marginBottom: '20px' }}>
                            <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
                                {(Array.isArray(sortedSuggestedRoutes) && sortedSuggestedRoutes.length > 0) ? (
-                                   sortedSuggestedRoutes.map((route, index) => { // Use sorted list
+                                   sortedSuggestedRoutes.map((route, index) => {
                                        if (!route?.properties?.label) { return <li key={`invalid-${index}`} style={{ color: 'red', padding: '5px' }}>Invalid route data</li>; }
-                                       // Check selection based on index *in the sorted list*
                                        const isSelected = index === currentlySelectedIdx;
                                        const label = route.properties.label;
                                        const durationMin = route.properties.summary_duration ? (route.properties.summary_duration / 60).toFixed(0) : '?';
                                        const fare = route.properties.total_fare;
                                        const fareString = typeof fare === 'number' ? `P${fare.toFixed(2)}` : '';
                                        return (
-                                           <li
-                                               key={label + index} // Key should ideally be more stable if possible
-                                               onClick={() => {
-                                                   // Set both index and label on click
-                                                   setCurrentlySelectedIdx(index);
-                                                   setSelectedRouteLabelState(label);
-                                               }}
-                                               style={{
-                                                   border: `2px solid ${isSelected ? '#6ee7b7' : 'rgba(255,255,255,0.2)'}`,
-                                                   backgroundColor: isSelected ? "rgba(110, 231, 183, 0.2)" : "rgba(255, 255, 255, 0.1)",
-                                                   borderRadius: "6px", padding: "10px 12px", marginBottom: "8px",
-                                                   cursor: "pointer", transition: 'background-color 0.2s ease, border-color 0.2s ease',
-                                               }}
+                                           <li key={label + index} onClick={() => { setCurrentlySelectedIdx(index); setSelectedRouteLabelState(label); }}
+                                               style={{ border: `2px solid ${isSelected ? '#6ee7b7' : 'rgba(255,255,255,0.2)'}`, backgroundColor: isSelected ? "rgba(110, 231, 183, 0.2)" : "rgba(255, 255, 255, 0.1)",
+                                                        borderRadius: "6px", padding: "10px 12px", marginBottom: "8px", cursor: "pointer", transition: 'background-color 0.2s ease, border-color 0.2s ease' }}
                                                onMouseEnter={(e) => { if (!isSelected) e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.2)'; }}
-                                               onMouseLeave={(e) => { if (!isSelected) e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.1)'; }}
-                                           >
+                                               onMouseLeave={(e) => { if (!isSelected) e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.1)'; }} >
                                                <div style={{ fontWeight: '600', fontSize: '0.95rem', marginBottom: '4px' }}>{label}</div>
                                                <div style={{ fontSize: '0.8rem', display: 'flex', justifyContent: 'space-between', color: '#d1d5db' }}>
                                                    <span>{durationMin !== '?' ? `~ ${durationMin} min` : 'Est. time unavailable'}</span>
                                                    <span>{fareString || 'Fare N/A'}</span>
                                                </div>
-                                           </li>
-                                       );
+                                           </li> );
                                    })
                                ) : ( <li style={{ color: '#a0aec0' }}>No route options generated.</li> )}
                            </ul>
@@ -458,7 +478,7 @@ const RouteBreakdown = () => {
                        {/* Separator */}
                        <hr style={{ border: 'none', borderTop: '1px solid rgba(255, 255, 255, 0.3)', margin: '20px 0' }} />
 
-                       {/* Display Details for *Selected* Route */}
+                       {/* Display Details for Selected Route */}
                        {currentRouteProps ? (
                        <>
                            <h2 style={{ fontSize: '1.1rem', marginBottom: '10px', fontWeight: '600' }}>Selected Route Details</h2>
@@ -478,27 +498,19 @@ const RouteBreakdown = () => {
                                        const widthPercent = totalDuration > 0 ? (((seg?.duration || 0) / totalDuration) * 100) : 0;
                                        const displayWidth = Math.max(widthPercent, 1);
                                        return (
-                                           <div
-                                               key={`${seg.mode}-${idx}`}
-                                               title={`${seg.mode}: ${((seg?.duration || 0) / 60).toFixed(1)} min`}
-                                               style={{
-                                                   width: `${displayWidth}%`, backgroundColor: modeColors[seg.mode] || "#999", height: "100%",
-                                                   display: "flex", alignItems: "center", justifyContent: "center",
-                                                   fontSize: "0.7rem", color: "#fff", fontWeight: "bold",
-                                                   overflow: 'hidden', whiteSpace: 'nowrap',
-                                                   borderRight: idx < currentSegments.length - 1 ? '1px solid rgba(255,255,255,0.2)' : 'none'
-                                               }}
-                                           >
+                                           <div key={`${seg.mode}-${idx}`} title={`${seg.mode}: ${((seg?.duration || 0) / 60).toFixed(1)} min`}
+                                               style={{ width: `${displayWidth}%`, backgroundColor: modeColors[seg.mode] || "#999", height: "100%", display: "flex", alignItems: "center", justifyContent: "center",
+                                                        fontSize: "0.7rem", color: "#fff", fontWeight: "bold", overflow: 'hidden', whiteSpace: 'nowrap',
+                                                        borderRight: idx < currentSegments.length - 1 ? '1px solid rgba(255,255,255,0.2)' : 'none' }} >
                                                {widthPercent > 18 ? seg.mode : (widthPercent > 8 ? <span className="material-icons" style={{fontSize: '16px'}}>{getModeIcon(seg.mode)}</span> : '')}
-                                           </div>
-                                       );
+                                           </div> );
                                    })}
                                </div>
                            ) : ( <p style={{fontSize: '0.9rem', color: '#a0aec0'}}>No segments to display.</p> )}
 
                            {/* Steps Display */}
-                           {currentSteps.length > 0 ? ( // Show AWS driving steps
-                               <div style={{ backgroundColor: "rgba(255, 255, 255, 0.08)", borderRadius: "5px", padding: "12px 16px", marginBottom: "5px", textAlign: "left", maxHeight: '35vh', overflowY: 'auto' }}>
+                           {currentSteps.length > 0 ? ( // Driving Steps
+                               <div style={{ backgroundColor: "rgba(255, 255, 255, 0.08)", borderRadius: "5px", padding: "12px 16px", marginBottom: "5px", textAlign: "left", maxHeight: 'calc(100vh - 500px)', /* Adjust max height */ overflowY: 'auto' }}>
                                    <h3 style={{ fontSize: "1.0rem", marginBottom: "10px", fontWeight: '600' }}>Driving Steps</h3>
                                    {currentSteps.map((step, idx) => (
                                        <div key={idx} style={{ display: "flex", alignItems: "center", marginBottom: "8px", fontSize: '0.85rem' }}>
@@ -507,16 +519,43 @@ const RouteBreakdown = () => {
                                        </div>
                                    ))}
                                </div>
-                           ) : currentSegments.length > 0 && currentRouteProps?.primary_mode !== 'Driving' ? ( // Show transit segments list instead
-                               <div style={{ backgroundColor: "rgba(255, 255, 255, 0.08)", borderRadius: "5px", padding: "12px 16px", marginBottom: "5px", textAlign: "left", maxHeight: '35vh', overflowY: 'auto' }}>
+                           ) : currentSegments.length > 0 && currentRouteProps?.primary_mode !== 'Driving' ? ( // Transit Segments
+                               <div style={{ backgroundColor: "rgba(255, 255, 255, 0.08)", borderRadius: "5px", padding: "12px 16px", marginBottom: "5px", textAlign: "left", maxHeight: 'calc(100vh - 500px)', /* Adjust max height */ overflowY: 'auto' }}>
                                    <h3 style={{ fontSize: "1.0rem", marginBottom: "10px", fontWeight: '600' }}>Transit Segments</h3>
                                    {currentSegments.map((seg, idx) => {
                                         if (!seg || !seg.mode) return <div key={`invalid-detail-${idx}`} style={{color: 'red', fontSize: '0.85rem'}}>Invalid segment data</div>;
+                                        const isExpanded = expandedSegmentIndex === idx;
+                                        // Use fullStopSequence for check
+                                        const hasStopsToShow = Array.isArray(seg.fullStopSequence) && seg.fullStopSequence.length > 0;
+                                        const isTransit = seg.mode !== 'Walk' && seg.mode !== 'Driving';
+
                                         return (
-                                            <div key={`seg-detail-${idx}`} style={{ display: "flex", alignItems: "center", marginBottom: "8px", fontSize: '0.85rem' }}>
-                                                <span className="material-icons" style={{ marginRight: '8px', color: modeColors[seg.mode] || '#ccc', fontSize: '20px' }}>{getModeIcon(seg.mode)}</span>
-                                                <span style={{flexGrow: 1}}>{seg.label || seg.mode} ({((seg?.duration || 0) / 60).toFixed(1)} min, {(seg?.distance / 1000).toFixed(1)} km)</span>
-                                                 {seg.fare > 0 && <span style={{marginLeft: '10px', fontWeight: 'bold'}}>(P{seg.fare.toFixed(2)})</span>}
+                                            <div key={`seg-detail-${idx}`} style={{ marginBottom: "8px", borderLeft: `3px solid ${modeColors[seg.mode] || '#ccc'}`, paddingLeft: '8px' }}>
+                                                {/* Main segment info (clickable for transit) */}
+                                                <div onClick={isTransit ? () => handleSegmentClick(idx) : undefined}
+                                                     style={{ display: "flex", alignItems: "center", fontSize: '0.85rem', cursor: isTransit ? 'pointer' : 'default', padding: '5px 0' }} >
+                                                    <span className="material-icons" style={{ marginRight: '8px', color: modeColors[seg.mode] || '#ccc', fontSize: '20px' }}>{getModeIcon(seg.mode)}</span>
+                                                    <span style={{flexGrow: 1}}>{seg.label || seg.mode} ({((seg?.duration || 0) / 60).toFixed(1)} min, {(seg?.distance / 1000).toFixed(1)} km)</span>
+                                                     {seg.fare > 0 && <span style={{marginLeft: '10px', fontWeight: 'bold'}}>(P{seg.fare.toFixed(2)})</span>}
+                                                     {/* Expand/collapse icon */}
+                                                     {isTransit && hasStopsToShow && (
+                                                         <span className="material-icons" style={{ fontSize: '18px', marginLeft: '5px', color: '#a0aec0' }}>
+                                                             {isExpanded ? 'expand_less' : 'expand_more'}
+                                                         </span>
+                                                     )}
+                                                </div>
+                                                {/* Conditionally render stops list */}
+                                                {isExpanded && hasStopsToShow && (
+                                                    <ol style={{ marginLeft: '25px', marginTop: '5px', marginBottom: '10px', fontSize: '0.8rem', color: '#cbd5e1', paddingLeft: '15px', listStyle: 'decimal' }}>
+                                                        {/* Map over fullStopSequence */}
+                                                        {seg.fullStopSequence.map((stopName, stopIdx) => (
+                                                            <li key={`${idx}-${stopIdx}`} style={{ padding: '2px 0', borderBottom: stopIdx < seg.fullStopSequence.length - 1 ? '1px dotted rgba(255,255,255,0.2)' : 'none' }}>
+                                                                {/* Highlight start/end stops */}
+                                                                {stopIdx === 0 ? <strong>{stopName} (Board)</strong> : stopIdx === seg.fullStopSequence.length - 1 ? <strong>{stopName} (Alight)</strong> : stopName}
+                                                            </li>
+                                                        ))}
+                                                    </ol>
+                                                )}
                                             </div>
                                         );
                                    })}

@@ -1,5 +1,7 @@
 // Inside ../components/routeUtils.js
 import * as turf from "@turf/turf";
+import AWS from 'aws-sdk'; // Import AWS SDK
+import { awsConfig } from "../config/config"; // Assuming config is here
 
 // --- Constants for Logic ---
 const MAX_WALK_TO_TRANSIT_KM = 1.5; // Max walk to/from stops (1.5km)
@@ -8,7 +10,7 @@ const MIN_PROGRESS_RATIO = 0.1; // Heuristic: Must reduce distance to dest by at
 const MAX_BEARING_DIFFERENCE_DEGREES = 80; // Max bearing deviation for Bus/Jeep
 
 // --- Speed Constants (Kilometers per Hour - KPH) ---
-const AVG_WALKING_SPEED_KPH = 4.7;
+const AVG_WALKING_SPEED_KPH = 4.7; // Used only for fallback/non-AWS estimates if needed
 const AVG_JEEP_SPEED_KPH = 20.0;
 const AVG_BUS_SPEED_KPH = 30.0;
 const AVG_P2P_BUS_SPEED_KPH = 36.0;
@@ -16,7 +18,7 @@ const AVG_LRT_SPEED_KPH = 60.0; // User specified
 const AVG_MRT_SPEED_KPH = 45.0; // User specified
 
 // Define Estimated Wait/Transfer Times (SECONDS)
-const ESTIMATED_WALK_TRANSFER_TIME_SEC = 120; // 2 minutes
+const ESTIMATED_WALK_TRANSFER_TIME_SEC = 120; // 2 minutes (Used if AWS fails or for stop-to-stop walks if implemented)
 const ESTIMATED_TRANSIT_WAIT_TIME_SEC = 300; // 5 minutes
 
 // --- Fare Calculation Functions ---
@@ -27,14 +29,16 @@ const ESTIMATED_TRANSIT_WAIT_TIME_SEC = 300; // 5 minutes
  * @returns {number} Fare in pesos, rounded to nearest whole number.
  */
 function calculateJeepFare(distanceKm) {
-    const minimumFare = 13;
+    const minimumFare = 13; // Example pesos
     const freeKilometers = 4;
-    const additionalFarePerKm = 1.8;
-    if (distanceKm <= 0) return 0;
+    const additionalFarePerKm = 1.8; // Example
+
+    if (distanceKm <= 0) return 0; // No negative distance
     if (distanceKm <= freeKilometers) {
-        return minimumFare;
+        return minimumFare; // Already whole number
     } else {
         const extraKm = distanceKm - freeKilometers;
+        // Jeepney fare often increments per whole km after first 4km
         const calculatedFare = minimumFare + Math.ceil(extraKm) * additionalFarePerKm;
         return Math.round(calculatedFare);
     }
@@ -46,9 +50,11 @@ function calculateJeepFare(distanceKm) {
  * @returns {number} Fare in pesos, rounded to nearest 0.25.
  */
 function calculateBusFare(distanceKm) {
-    const baseFare = 15;
+    // Simplified model (e.g., Ordinary City Bus)
+    const baseFare = 15; // Example pesos
     const baseKm = 5;
-    const additionalPerKm = 2.65;
+    const additionalPerKm = 2.65; // Example
+
     if (distanceKm <= 0) return 0;
     if (distanceKm <= baseKm) {
         // Base fare might need rounding if not ending in .00 or .50 based on rules
@@ -92,7 +98,7 @@ function calculateMRTFare(distanceKm) {
 
 /**
  * Main fare calculation dispatcher.
- * @param {string} mode - The mode of transport (e.g., 'Bus', 'MRT').
+ * @param {string} mode - The mode of transport.
  * @param {number} distanceMeters - Distance in meters.
  * @returns {number} Calculated fare in pesos.
  */
@@ -121,112 +127,64 @@ function calculateFare(mode, distanceMeters) {
 function findNearestStop(targetPoint, transitFeatures, allowedTypes) {
   let nearestFeature = null;
   let minDistance = Infinity;
-
-  // Stricter Input validation for targetPoint structure and other params
-  if (!targetPoint || typeof targetPoint !== 'object' || targetPoint.type !== 'Feature' || targetPoint.geometry?.type !== 'Point' || !Array.isArray(targetPoint.geometry?.coordinates) || targetPoint.geometry.coordinates.length < 2 || typeof targetPoint.geometry.coordinates[0] !== 'number' || typeof targetPoint.geometry.coordinates[1] !== 'number' || isNaN(targetPoint.geometry.coordinates[0]) || isNaN(targetPoint.geometry.coordinates[1]) ||
-      !Array.isArray(transitFeatures) || !Array.isArray(allowedTypes)) {
+  if (!targetPoint || typeof targetPoint !== 'object' || !Array.isArray(transitFeatures) || !Array.isArray(allowedTypes)) {
     console.error("findNearestStop: Invalid input.", { targetPoint: JSON.stringify(targetPoint), allowedTypes });
-    return { feature: null, distance: Infinity }; // Return expected structure
+    return { feature: null, distance: Infinity };
   }
-
-  // Outer try...catch for safety
   try {
-    transitFeatures.forEach((feature, index) => {
-      // Inner try...catch to handle errors with individual features
+    transitFeatures.forEach((feature) => {
       try {
-        // Check if it's a Point feature and has the allowed type property
-        if (feature?.geometry?.type === 'Point' &&
-            feature?.properties?.type &&
-            allowedTypes.includes(feature.properties.type))
-        {
-          // Validate coordinates before using turf
+        if (feature?.geometry?.type === 'Point' && feature?.properties?.type && allowedTypes.includes(feature.properties.type)) {
           const coords = feature.geometry.coordinates;
-          if (!Array.isArray(coords) || coords.length < 2 || typeof coords[0] !== 'number' || typeof coords[1] !== 'number' || isNaN(coords[0]) || isNaN(coords[1])) {
-              // console.warn(`findNearestStop: Skipping feature index ${index} ('${feature?.properties?.name}') due to invalid coordinates:`, coords);
-              return; // Skip this feature using return within forEach callback
-          }
-
-          const stopPoint = turf.point(coords); // Use validated coords
+          if (!Array.isArray(coords) || coords.length < 2 || typeof coords[0] !== 'number' || typeof coords[1] !== 'number' || isNaN(coords[0]) || isNaN(coords[1])) return;
+          const stopPoint = turf.point(coords);
           const distance = turf.distance(targetPoint, stopPoint, { units: 'kilometers' });
-
-          // Check if distance calculation returned a valid number
-          if (typeof distance !== 'number' || isNaN(distance)) {
-              // console.warn(`findNearestStop: Skipping feature index ${index} ('${feature?.properties?.name}') due to invalid distance calculation result:`, distance);
-               return; // Skip this feature
-          }
-
-          if (distance < minDistance) {
-            minDistance = distance;
-            nearestFeature = feature;
+          if (typeof distance === 'number' && !isNaN(distance) && distance < minDistance) {
+            minDistance = distance; nearestFeature = feature;
           }
         }
-      } catch (innerError) {
-        // Log error for the specific feature but continue the loop
-        console.error(`findNearestStop: Error processing feature index ${index} ('${feature?.properties?.name}'):`, innerError, "Feature Coords:", feature?.geometry?.coordinates);
-      }
-    }); // End forEach
-  } catch (outerError) {
-     console.error("findNearestStop: Unexpected outer error during processing:", outerError);
-     return { feature: null, distance: Infinity }; // Ensure return structure on outer error
-  }
-
-  // Ensure the final return is always the object structure
-  // console.log(`findNearestStop completed. Nearest: ${nearestFeature?.properties?.name}, Distance: ${minDistance === Infinity ? 'Infinity' : minDistance.toFixed(3)}`);
+      } catch (innerError) { console.error(`findNearestStop: Error processing feature...`, innerError); }
+    });
+  } catch (outerError) { console.error("findNearestStop: Outer error.", outerError); return { feature: null, distance: Infinity }; }
   return { feature: nearestFeature, distance: minDistance };
 }
 
 
 // --- Helper Function: Estimate Segment Duration (Using KPH) ---
 /**
- * Estimates duration for a route segment based on mode and distance.
+ * Estimates duration for a TRANSIT route segment based on mode and distance.
  * Uses KPH constants and returns total time in SECONDS.
+ * NOTE: This is NOT used for AWS calculated walking segments.
  */
-function estimateSegmentDuration(mode, distanceMeters, isFirstOrLastWalk = false, isTransfer = false) {
+function estimateSegmentDuration(mode, distanceMeters) {
   let speedKph;
-  let additionalTimeSec = 0;
-  const distanceKm = distanceMeters / 1000; // Convert distance to KM for calculation
-
-  // Normalize mode by removing '-Stop' suffix if present
+  const distanceKm = distanceMeters / 1000;
   const cleanMode = mode?.replace('-Stop', '') || 'Walk';
-
-  // Assign speed based on mode
   switch (cleanMode) {
-    case 'Walk': speedKph = AVG_WALKING_SPEED_KPH; break;
     case 'Jeep': speedKph = AVG_JEEP_SPEED_KPH; break;
     case 'Bus': speedKph = AVG_BUS_SPEED_KPH; break;
     case 'P2P-Bus': speedKph = AVG_P2P_BUS_SPEED_KPH; break;
-    case 'LRT1': case 'LRT2': speedKph = AVG_LRT_SPEED_KPH; break; // Use updated KPH
-    case 'MRT': speedKph = AVG_MRT_SPEED_KPH; break; // Use updated KPH
-    default: console.warn(`Estimating duration for unknown mode "${mode}"...`); speedKph = AVG_WALKING_SPEED_KPH;
+    case 'LRT1': case 'LRT2': speedKph = AVG_LRT_SPEED_KPH; break;
+    case 'MRT': speedKph = AVG_MRT_SPEED_KPH; break;
+    default: console.warn(`Estimating transit duration for unknown mode "${mode}"...`); return ESTIMATED_TRANSIT_WAIT_TIME_SEC;
   }
-
-  // Add wait/transfer time
-  if (cleanMode === 'Walk') {
-    if (isTransfer && !isFirstOrLastWalk) { additionalTimeSec = ESTIMATED_WALK_TRANSFER_TIME_SEC; }
-  } else { // For transit modes
-    if (!isTransfer) { additionalTimeSec = ESTIMATED_TRANSIT_WAIT_TIME_SEC; }
-  }
-
-  // Calculate travel time in SECONDS
   let travelTimeSec = 0;
   if (distanceKm > 0 && speedKph && speedKph > 0) {
-      const travelTimeHours = distanceKm / speedKph; // Time = Distance / Speed
-      travelTimeSec = travelTimeHours * 3600; // Convert hours to seconds
-  } else if (distanceKm > 0) {
-      console.warn(`Invalid speed (${speedKph}) for mode ${mode}...`); travelTimeSec = 0;
-  }
-
-  // Return total time (travel + wait/transfer)
-  return travelTimeSec + additionalTimeSec;
+      const travelTimeHours = distanceKm / speedKph;
+      travelTimeSec = travelTimeHours * 3600;
+  } else if (distanceKm > 0) { console.warn(`Invalid speed (${speedKph}) for mode ${mode}...`); travelTimeSec = 0; }
+  return travelTimeSec + ESTIMATED_TRANSIT_WAIT_TIME_SEC;
 }
 
 
-// --- Helper Function: tryBuildTransitRoute (WITH P2P HANDLING & CONDITIONAL DIRECTION CHECK) ---
+// --- Helper Function: tryBuildTransitRoute (ASYNC with AWS WALKING, P2P, CONDITIONAL DIRECTION, FULL STOP SEQUENCE) ---
 /**
  * Attempts to build a single transit route option focusing on specific modes.
+ * Uses AWS calculateRoute for walking segments. Includes boarding/alighting stops in labels
+ * and attempts to extract intermediate stops.
  * Returns a route object if successful, null otherwise.
  */
-function tryBuildTransitRoute(startPoint, endPoint, transitFeatures, allowedLineTypes, primaryModeLabel) {
+async function tryBuildTransitRoute(startPoint, endPoint, transitFeatures, allowedLineTypes, primaryModeLabel, routeCalculator) {
     console.log(`Attempting to build route prioritizing: ${allowedLineTypes.join(', ')}`);
 
     try {
@@ -237,39 +195,64 @@ function tryBuildTransitRoute(startPoint, endPoint, transitFeatures, allowedLine
     let currentPosition = startPoint;
     let accumulatedSegments = [];
     let transitLegAdded = false;
+    let boardingStopName = 'Origin Area';
+    let alightingStopName = 'Destination Area';
+    let startStopPoint = null;
+    let nearestStartStopFeature = null;
+    let nearestEndStopFeature = null;
 
     // Determine compatible stop types...
     const allowedStopTypes = allowedLineTypes.flatMap(type => {
-         if (type === 'MRT' || type === 'LRT1' || type === 'LRT2' || type === 'Bus' || type === 'P2P-Bus') { return [`${type}-Stop`, 'Bus-Stop']; }
+         if (['MRT', 'LRT1', 'LRT2', 'Bus', 'P2P-Bus'].includes(type)) { return [`${type}-Stop`, 'Bus-Stop']; }
          return [];
-     }).filter((value, index, self) => self.indexOf(value) === index);
+     }).filter((v, i, a) => a.indexOf(v) === i);
     if (allowedLineTypes.includes('Bus') && !allowedStopTypes.includes('Bus-Stop')) { allowedStopTypes.push('Bus-Stop'); }
-    const requiresStartStop = !(allowedStopTypes.length === 0 && allowedLineTypes.includes('Jeep'));
+    const requiresStartStop = !(allowedLineTypes.includes('Jeep') && allowedStopTypes.length === 0);
     console.log(` -> Requires Start Stop: ${requiresStartStop}, Allowed Stop Types: [${allowedStopTypes.join(', ')}]`);
     if (allowedStopTypes.length === 0 && !allowedLineTypes.includes('Jeep')) {
         console.log(` -> EXITED EARLY: No stop types defined for allowed lines: [${allowedLineTypes.join(', ')}].`);
         return null;
     }
 
-    // 1. Find nearest START stop (if required)
+    // 1. Find nearest START stop and calculate INITIAL WALK using AWS
     if (requiresStartStop) {
         console.log(` -> Calling findNearestStop for types [${allowedStopTypes.join(', ')}] near ${JSON.stringify(startPoint?.geometry?.coordinates)}`);
         const nearestStartStopInfo = findNearestStop(startPoint, transitFeatures, allowedStopTypes);
         console.log(` -> findNearestStop Result: ${JSON.stringify(nearestStartStopInfo)}`);
 
-        if (nearestStartStopInfo && nearestStartStopInfo.feature && nearestStartStopInfo.distance <= MAX_WALK_TO_TRANSIT_KM) {
-            const startStopFeature = nearestStartStopInfo.feature;
-            const startStopPoint = turf.point(startStopFeature.geometry.coordinates);
-            console.log(` -> Found nearby start stop: ${startStopFeature.properties.name} (${startStopFeature.properties.type})`);
-            const walkToStopDist = nearestStartStopInfo.distance * 1000;
-            const walkToStopTime = estimateSegmentDuration('Walk', walkToStopDist, true, false);
-            const walkToStopGeometry = turf.lineString([startPoint.geometry.coordinates, startStopPoint.geometry.coordinates]);
-            accumulatedSegments.push({
-                mode: 'Walk', label: `Walk to ${startStopFeature.properties.name || 'start'}`, distance: walkToStopDist,
-                duration: walkToStopTime, fare: 0,
-                geometry: walkToStopGeometry.geometry
-            });
-            currentPosition = startStopPoint;
+        if (nearestStartStopInfo?.feature && nearestStartStopInfo.distance <= MAX_WALK_TO_TRANSIT_KM) {
+            nearestStartStopFeature = nearestStartStopInfo.feature; // Store the start stop feature
+            boardingStopName = nearestStartStopFeature.properties.name || `Stop near Origin`;
+            startStopPoint = turf.point(nearestStartStopFeature.geometry.coordinates);
+            console.log(` -> Found nearby start stop: ${boardingStopName} (${nearestStartStopFeature.properties.type})`);
+
+            // Calculate Walk Route 1 (Origin -> Start Stop) using AWS
+            try {
+                const walkParams1 = {
+                    CalculatorName: awsConfig.routeCalculatorName,
+                    DeparturePosition: startPoint.geometry.coordinates,
+                    DestinationPosition: startStopPoint.geometry.coordinates, // Walk TO the stop
+                    TravelMode: 'Walking', IncludeLegGeometry: true
+                };
+                console.log("   - Calculating walk route 1 (Origin -> Stop)...");
+                const walkRoute1Data = await routeCalculator.calculateRoute(walkParams1).promise();
+
+                if (walkRoute1Data?.Legs?.[0]) {
+                     const leg = walkRoute1Data.Legs[0];
+                     if (leg.Distance > MAX_WALK_TO_TRANSIT_KM * 1.1) { // Allow 10% buffer
+                          console.warn(`   -> AWS Walk 1 distance (${leg.Distance.toFixed(2)}km) exceeds limit. Discarding.`); return null;
+                     }
+                     accumulatedSegments.push({
+                         mode: 'Walk', label: `Walk to ${boardingStopName}`,
+                         distance: leg.Distance * 1000, duration: leg.DurationSeconds, fare: 0,
+                         geometry: { type: 'LineString', coordinates: leg.Geometry.LineString }
+                     });
+                     currentPosition = startStopPoint; // Update position to the stop for the next leg
+                     console.log("   - Added Walk Route 1 Segment (AWS)");
+                } else { throw new Error("No walking leg found from AWS"); }
+            } catch (walkError1) {
+                 console.error("   - Failed to calculate walk route 1:", walkError1.message); return null;
+            }
         } else {
             console.log(` -> EXITED: No suitable start stop found within ${MAX_WALK_TO_TRANSIT_KM} km.`);
              if (nearestStartStopInfo) { console.log(`   (Nearest stop distance was: ${nearestStartStopInfo.distance === Infinity ? 'Infinity' : nearestStartStopInfo.distance.toFixed(3)} km)`); }
@@ -282,18 +265,16 @@ function tryBuildTransitRoute(startPoint, endPoint, transitFeatures, allowedLine
     }
 
 
-    // 2. Find BEST line and Create TRANSIT segment (with geometry)
+    // 2. Find BEST line
     let bestLineOption = null;
     const candidateLines = transitFeatures.filter(f => f?.geometry?.type === 'LineString' && f?.properties?.type && allowedLineTypes.includes(f.properties.type));
-    console.log(` -> Checking ${candidateLines.length} candidate lines of type(s) [${allowedLineTypes.join(', ')}] near current pos: ${JSON.stringify(currentPosition?.geometry?.coordinates)}`);
-
+    console.log(` -> Checking ${candidateLines.length} candidate lines...`);
     for (const line of candidateLines) {
         try {
             const isP2P = line.properties.type === 'P2P-Bus';
             const isRail = ['MRT', 'LRT1', 'LRT2'].includes(line.properties.type);
             let entryPointOnLine, exitPointOnLine;
 
-            // Entry/Exit points
             if (isP2P) {
                  if (!line.geometry?.coordinates || line.geometry.coordinates.length < 2) { continue; }
                  entryPointOnLine = turf.point(line.geometry.coordinates[0]);
@@ -308,23 +289,18 @@ function tryBuildTransitRoute(startPoint, endPoint, transitFeatures, allowedLine
                 if (!exitPointOnLine) continue;
             }
 
-            // --- ENHANCED Direction & Progress Check ---
             const distBetweenEntryExit = turf.distance(entryPointOnLine, exitPointOnLine, { units: 'kilometers' });
-
             if (distBetweenEntryExit > 0.01) {
-                // A. Check Progress
                 const distToDestViaExit = turf.distance(exitPointOnLine, endPoint, { units: 'kilometers' });
                 const distToDestViaEntry = turf.distance(entryPointOnLine, endPoint, { units: 'kilometers' });
                 const threshold = distToDestViaEntry * (1.0 - MIN_PROGRESS_RATIO);
                 const makesProgress = distToDestViaExit < threshold;
-
-                // B. Check Bearing (Conditional)
-                let bearingDifference = 0; // Declare outside the if
-                let correctBearing = true; // Default true, only check non-rail/non-P2P
+                let bearingDifference = 0;
+                let correctBearing = true;
                 if (!isRail && !isP2P) {
-                    bearingDifference = 180; // Initialize specific value for check
+                    bearingDifference = 180;
                     try {
-                        const entryLocation = entryPointOnLine.properties.location; // Location property only exists for non-P2P nearestPointOnLine result
+                        const entryLocation = entryPointOnLine.properties.location;
                         const pointSlightlyAfterEntry = turf.along(line, entryLocation + 0.01, { units: 'kilometers' });
                         if (turf.distance(entryPointOnLine, pointSlightlyAfterEntry, { units: 'meters' }) > 1) {
                             const bearingToDest = turf.bearing(entryPointOnLine, endPoint);
@@ -344,113 +320,132 @@ function tryBuildTransitRoute(startPoint, endPoint, transitFeatures, allowedLine
                         }
                     } catch (bearingError) { console.warn(`    -> Error calculating bearing...`); correctBearing = false; }
                 }
-
-                // C. Check Location Order (Only for non-P2P, non-Rail one-way modes)
                 const isStrictlyOneWay = ['Bus', 'Jeep'].includes(line.properties.type);
-                // Location check is only relevant if NOT P2P and NOT Rail
-                const locationCheckPassed = isP2P || isRail || !isStrictlyOneWay || (exitPointOnLine.properties.location > entryPointOnLine.properties.location);
+                const locationCheckPassed = isP2P || isRail || !isStrictlyOneWay || (exitPointOnLine?.properties?.location > entryPointOnLine?.properties?.location);
 
-                console.log(`    -> Checking Line: ${line.properties.name} (${line.properties.type})`);
-                console.log(`       Progress Check: ${makesProgress}`);
-                if (!isRail && !isP2P) console.log(`       Bearing Check: ${correctBearing} (Diff: ${bearingDifference.toFixed(1)} <= ${MAX_BEARING_DIFFERENCE_DEGREES})`); else console.log(`       Bearing Check: SKIPPED (Rail/P2P)`);
-                if (isStrictlyOneWay) console.log(`       Location Check: ${locationCheckPassed}`); else console.log(`       Location Check: SKIPPED (Rail/P2P/Other)`);
+                // console.log(`    -> Checking Line: ${line.properties.name} (${line.properties.type})`);
+                // console.log(`       Progress Check: ${makesProgress}`);
+                // if (!isRail && !isP2P) console.log(`       Bearing Check: ${correctBearing} (Diff: ${bearingDifference.toFixed(1)} <= ${MAX_BEARING_DIFFERENCE_DEGREES})`); else console.log(`       Bearing Check: SKIPPED (Rail/P2P)`);
+                // if (isStrictlyOneWay) console.log(`       Location Check: ${locationCheckPassed}`); else console.log(`       Location Check: SKIPPED (Rail/P2P/Other)`);
 
-                // ALL relevant checks must pass
                 if (makesProgress && correctBearing && locationCheckPassed) {
                     let segmentOnLine, segmentDistanceKm;
                     if (isP2P) {
-                        segmentOnLine = line;
-                        segmentDistanceKm = turf.length(line, { units: 'kilometers' });
+                        segmentOnLine = line; segmentDistanceKm = turf.length(line, { units: 'kilometers' });
                     } else {
                         segmentOnLine = turf.lineSlice(entryPointOnLine, exitPointOnLine, line);
-                        if (!segmentOnLine?.geometry?.coordinates || segmentOnLine.geometry.coordinates.length < 2) {
-                             console.warn(`       -> lineSlice failed for ${line.properties.name}. Skipping.`); continue;
-                        }
+                        if (!segmentOnLine?.geometry?.coordinates || segmentOnLine.geometry.coordinates.length < 2) { continue; }
                         segmentDistanceKm = turf.length(segmentOnLine, { units: 'kilometers' });
                     }
                     if (!bestLineOption || segmentDistanceKm < bestLineOption.distanceKm) {
                          bestLineOption = { line, entryPointOnLine, exitPointOnLine, distanceKm: segmentDistanceKm, isP2P: isP2P };
                          console.log(`       -> Candidate selected (provisional): ${line.properties.name}, On-line Dist: ${segmentDistanceKm.toFixed(2)}km`);
                     }
-                } else { console.log(`    -> FAILED combined direction/progress/location check.`); }
+                }
+                // else { console.log(`    -> FAILED combined direction/progress/location check.`); }
             }
-            // --- End ENHANCED Check ---
-
         } catch(lineError) { console.error(`Error processing candidate line ${line?.properties?.name}:`, lineError); }
     } // End loop
 
-    // 3. Create Transit Segment if a line was selected
+    // 3. Create Transit Segment
     if (bestLineOption) {
         const { line, entryPointOnLine, exitPointOnLine, distanceKm, isP2P } = bestLineOption;
-        console.log(` -> Selected transit leg: ${line.properties.name} (${line.properties.type})`);
-        const transitDist = distanceKm * 1000;
         const mode = line.properties.type;
-        const transitTime = estimateSegmentDuration(mode, transitDist, false, false);
-        const transitFare = calculateFare(mode, transitDist);
-        const transitSegmentGeometry = isP2P ? line : turf.lineSlice(entryPointOnLine, exitPointOnLine, line);
-        if (!transitSegmentGeometry?.geometry?.coordinates || transitSegmentGeometry.geometry.coordinates.length < 2) {
-             console.error(` -> Failed to get geometry for selected transit leg: ${line.properties.name}. Discarding option.`); return null;
-        }
-        accumulatedSegments.push({ mode: mode, label: `Take ${line.properties.name || mode}`, distance: transitDist, duration: transitTime, fare: transitFare, geometry: transitSegmentGeometry.geometry });
+        const lineName = line.properties.name || mode;
+        nearestEndStopFeature = null; // Reset
+
         let exitPosition = isP2P ? turf.point(line.geometry.coordinates[line.geometry.coordinates.length - 1]) : turf.point(exitPointOnLine.geometry.coordinates);
+        alightingStopName = 'Destination Area'; // Reset default
+
         if (!isP2P && allowedStopTypes.length > 0) {
             const nearestEndStopInfo = findNearestStop(exitPosition, transitFeatures, allowedStopTypes);
-            if (nearestEndStopInfo && nearestEndStopInfo.feature && nearestEndStopInfo.distance <= MAX_WALK_TO_TRANSIT_KM / 2) {
-                 console.log(` -> Exiting near stop: ${nearestEndStopInfo.feature.properties.name}`);
-                 exitPosition = turf.point(nearestEndStopInfo.feature.geometry.coordinates);
-            } else { console.log(` -> No specific stop found very near exit point on line.`); }
-        } else if (isP2P) { console.log(` -> Exiting at P2P terminal.`); }
-        else { console.log(` -> No specific stops for mode ${mode}. Using line exit point.`); }
+            if (nearestEndStopInfo?.feature && nearestEndStopInfo.distance <= MAX_WALK_TO_TRANSIT_KM / 2) {
+                 nearestEndStopFeature = nearestEndStopInfo.feature; // Store end stop feature
+                 alightingStopName = nearestEndStopFeature.properties.name || `Stop near Destination`;
+                 exitPosition = turf.point(nearestEndStopFeature.geometry.coordinates);
+            } else { alightingStopName = `Area near Destination`; }
+        } else if (isP2P) {
+             alightingStopName = line.properties.name ? `${line.properties.name} Terminal` : `P2P Terminal`;
+             // Try to find the feature for the end terminal for consistency if needed later
+             nearestEndStopFeature = transitFeatures.find(f => f.properties.name === line.properties.stops?.[line.properties.stops.length -1] && f.geometry.type === 'Point');
+             if(nearestEndStopFeature) alightingStopName = nearestEndStopFeature.properties.name; // Use actual stop name if found
+        } else { alightingStopName = `Area near Destination`; }
+
+        console.log(` -> Selected transit leg: ${lineName} (${mode})`);
+        const transitDist = distanceKm * 1000;
+        const transitTime = estimateSegmentDuration(mode, transitDist); // Use estimated duration
+        const transitFare = calculateFare(mode, transitDist);
+        const transitSegmentGeometryFeature = isP2P ? line : turf.lineSlice(entryPointOnLine, exitPointOnLine, line);
+        if (!transitSegmentGeometryFeature?.geometry?.coordinates) { return null; }
+
+        // Extract Full Stop Sequence
+        let fullStopSequence = [];
+        const lineStopsSequence = line.properties?.stops;
+        const finalBoardingStopName = nearestStartStopFeature?.properties?.name || boardingStopName;
+        const finalAlightingStopName = nearestEndStopFeature?.properties?.name || alightingStopName;
+
+        if (Array.isArray(lineStopsSequence) && lineStopsSequence.length > 0) {
+            const boardIdx = lineStopsSequence.findIndex(stopName => stopName === finalBoardingStopName);
+            const alightIdx = lineStopsSequence.findIndex(stopName => stopName === finalAlightingStopName);
+            console.log(`   - Stop Sequence Check: Board='${finalBoardingStopName}' (idx ${boardIdx}), Alight='${finalAlightingStopName}' (idx ${alightIdx})`);
+            if (boardIdx !== -1 && alightIdx !== -1) { // Both stops must be found in the sequence
+                 if (boardIdx <= alightIdx) { // Traveling forward or single stop
+                     fullStopSequence = lineStopsSequence.slice(boardIdx, alightIdx + 1);
+                 } else { // Travelling in reverse direction relative to defined sequence
+                     fullStopSequence = lineStopsSequence.slice(alightIdx, boardIdx + 1).reverse();
+                 }
+                 console.log(`   - Full Stop Sequence Found: [${fullStopSequence.join(', ')}]`);
+            } else { console.warn(`   - Could not find boarding/alighting stops in sequence.`); }
+        } else { console.warn(`   - No 'stops' array found in properties for line: ${lineName}`); }
+
+        accumulatedSegments.push({
+            mode: mode, label: `Take ${lineName} from ${finalBoardingStopName} to ${finalAlightingStopName}`,
+            distance: transitDist, duration: transitTime, fare: transitFare,
+            geometry: transitSegmentGeometryFeature.geometry,
+            fullStopSequence: fullStopSequence // Store the full sequence
+        });
+
         currentPosition = exitPosition;
         transitLegAdded = true;
-    } else {
-        console.log(` -> EXITED: No suitable line found for mode(s): [${allowedLineTypes.join(', ')}] connecting start/end areas.`);
-        return null;
-    }
+    } else { console.log(` -> EXITED: No suitable line found for mode(s): [${allowedLineTypes.join(', ')}]`); return null; }
 
-    // 4. Final Walking Segment
+    // 4. Final Walking Segment (Use AWS)
     if (transitLegAdded) {
-        const walkFromStopDist = turf.distance(currentPosition, endPoint, { units: 'meters' });
-        if ((walkFromStopDist / 1000) <= MAX_WALK_TO_TRANSIT_KM * 1.5) {
-            const walkFromStopTime = estimateSegmentDuration('Walk', walkFromStopDist, true, false);
-            const finalWalkGeometry = turf.lineString([currentPosition.geometry.coordinates, endPoint.geometry.coordinates]);
-            accumulatedSegments.push({ mode: 'Walk', label: `Walk to Destination`, distance: walkFromStopDist, duration: walkFromStopTime, fare: 0, geometry: finalWalkGeometry.geometry });
-        } else {
-            console.log(` -> EXITED: Final walk (${(walkFromStopDist / 1000).toFixed(2)} km) is too long. Discarding ${primaryModeLabel} option.`); return null;
-        }
-    } else {
-        console.log(` -> EXITED: Cannot add final walk as no transit leg was added.`); return null;
-    }
+        try {
+            const walkParams2 = { CalculatorName: awsConfig.routeCalculatorName, DeparturePosition: currentPosition.geometry.coordinates, DestinationPosition: endPoint.geometry.coordinates, TravelMode: 'Walking', IncludeLegGeometry: true };
+            console.log("   - Calculating walk route 2 (Exit -> Destination)...");
+            const walkRoute2Data = await routeCalculator.calculateRoute(walkParams2).promise();
+             if (walkRoute2Data?.Legs?.[0]) {
+                const leg = walkRoute2Data.Legs[0];
+                if ((leg.Distance) <= MAX_WALK_TO_TRANSIT_KM * 1.5) {
+                     accumulatedSegments.push({
+                         mode: 'Walk', label: `Walk from ${alightingStopName} to Destination`,
+                         distance: leg.Distance * 1000, duration: leg.DurationSeconds, fare: 0,
+                         geometry: { type: 'LineString', coordinates: leg.Geometry.LineString }
+                     });
+                     console.log("   - Added Walk Route 2 Segment (AWS)");
+                } else { console.log(` -> EXITED: Final walk (AWS: ${leg.Distance.toFixed(2)} km) is too long.`); return null; }
+             } else { throw new Error("No walking leg found from AWS"); }
+         } catch (walkError2) { console.error("   - Failed to calculate walk route 2:", walkError2.message); return null; }
+    } else { console.log(` -> EXITED: Cannot add final walk.`); return null; }
 
 
-    // 5. Assemble Combined Geometry (Simpler Concatenation)
+    // 5. Assemble Combined Geometry
     console.log(" -> Assembling combined geometry...");
     let combinedCoordinates = [];
     if (Array.isArray(accumulatedSegments) && accumulatedSegments.length > 0) {
-        console.log(`   - Processing ${accumulatedSegments.length} segments for geometry combination.`);
-        accumulatedSegments.forEach((seg, index) => {
-            if (!seg?.geometry?.coordinates || !Array.isArray(seg.geometry.coordinates) || seg.geometry.coordinates.length === 0) {
-                console.warn(`   - Segment ${index} (${seg?.mode}) has invalid or missing geometry. Skipping.`); return;
-            }
-            combinedCoordinates.push(...seg.geometry.coordinates);
+        accumulatedSegments.forEach((seg) => {
+            if (seg?.geometry?.coordinates && Array.isArray(seg.geometry.coordinates)) { combinedCoordinates.push(...seg.geometry.coordinates); }
         });
         if (combinedCoordinates.length > 1) {
-            let originalLength = combinedCoordinates.length;
-            let cleanedCoordinates = [combinedCoordinates[0]];
-            for (let i = 1; i < combinedCoordinates.length; i++) {
-                if (combinedCoordinates[i][0] !== cleanedCoordinates[cleanedCoordinates.length - 1][0] ||
-                    combinedCoordinates[i][1] !== cleanedCoordinates[cleanedCoordinates.length - 1][1]) {
-                    cleanedCoordinates.push(combinedCoordinates[i]);
-                }
-            }
-            combinedCoordinates = cleanedCoordinates;
-            console.log(`   - Cleaned duplicates: ${originalLength} -> ${cleanedCoordinates.length} points.`);
+            let cleaned = [combinedCoordinates[0]];
+            for (let i = 1; i < combinedCoordinates.length; i++) { if (combinedCoordinates[i][0] !== cleaned[cleaned.length - 1][0] || combinedCoordinates[i][1] !== cleaned[cleaned.length - 1][1]) { cleaned.push(combinedCoordinates[i]); } }
+            combinedCoordinates = cleaned;
         }
     }
-    console.log(` -> Total final combined coordinates: ${combinedCoordinates.length}`);
     const finalRouteGeometry = combinedCoordinates.length >= 2 ? turf.lineString(combinedCoordinates).geometry : null;
-    if (!finalRouteGeometry) { console.warn(` -> Could not generate valid combined geometry for ${primaryModeLabel}.`); }
-    else { console.log(` -> Successfully generated combined geometry.`); }
+    if (finalRouteGeometry) console.log(` -> Successfully generated combined geometry.`);
+    else console.warn(` -> Could not generate valid combined geometry for ${primaryModeLabel}.`);
 
     // 6. Assemble final route object
     const totalDuration = accumulatedSegments.reduce((sum, s) => sum + (s?.duration || 0), 0);
@@ -460,11 +455,9 @@ function tryBuildTransitRoute(startPoint, endPoint, transitFeatures, allowedLine
         type: "Feature",
         properties: {
             label: `Route via ${primaryModeLabel} (Est. ${(totalDuration / 60).toFixed(0)} min, P${totalFare.toFixed(2)})`,
-            segments: accumulatedSegments,
-            summary_duration: totalDuration,
-            summary_distance: totalDistance,
-            total_fare: totalFare,
-            primary_mode: primaryModeLabel
+            segments: accumulatedSegments, // Includes fullStopSequence
+            summary_duration: totalDuration, summary_distance: totalDistance,
+            total_fare: totalFare, primary_mode: primaryModeLabel
         },
         geometry: finalRouteGeometry
     };
@@ -483,8 +476,8 @@ function buildDirectRouteOption(awsRouteData, startPoint, endPoint) {
 }
 
 
-// --- Main Exported Function ---
-export function buildSnappedRouteData(awsRouteData, transitFeatures) {
+// --- Main Exported Function (ASYNC) ---
+export async function buildSnappedRouteData(awsRouteData, transitFeatures) { // Added async
     console.log("Starting buildSnappedRouteData - Generating multiple options...");
     let finalRouteOptions = [];
 
@@ -495,7 +488,15 @@ export function buildSnappedRouteData(awsRouteData, transitFeatures) {
     const startPoint = turf.point(awsRouteGeometry[0]);
     const endPoint = turf.point(awsRouteGeometry[awsRouteGeometry.length - 1]);
 
-    // --- Attempt to build route for each prioritized mode group ---
+    // Create Route Calculator Instance ONCE
+    if (!AWS.config.credentials) {
+        console.error("AWS Credentials not configured. Cannot create route calculator.");
+        const directOption = buildDirectRouteOption(awsRouteData, startPoint, endPoint);
+        return directOption ? [directOption] : [];
+    }
+    const routeCalculator = new AWS.Location();
+
+    // --- Attempt to build route for each mode group IN PARALLEL ---
     const modesToTry = [
         { types: ['MRT'], label: 'MRT' },
         { types: ['LRT1'], label: 'LRT1' },
@@ -504,11 +505,16 @@ export function buildSnappedRouteData(awsRouteData, transitFeatures) {
         { types: ['Jeep'], label: 'Jeep' }
     ];
 
-    modesToTry.forEach(modeGroup => {
-        try {
-            const option = tryBuildTransitRoute(startPoint, endPoint, transitFeatures, modeGroup.types, modeGroup.label);
-            if (option) { finalRouteOptions.push(option); }
-        } catch (error) { console.error(`Error generating route option for mode ${modeGroup.label}:`, error); }
+    const transitPromises = modesToTry.map(modeGroup =>
+        tryBuildTransitRoute(startPoint, endPoint, transitFeatures, modeGroup.types, modeGroup.label, routeCalculator) // Pass calculator
+            .catch(error => {
+                console.error(`Error generating route option for mode ${modeGroup.label}:`, error); return null;
+            })
+    );
+    const transitResults = await Promise.allSettled(transitPromises);
+    transitResults.forEach(result => {
+        if (result.status === 'fulfilled' && result.value) { finalRouteOptions.push(result.value); }
+        else if (result.status === 'rejected') { console.error("A transit route promise was rejected:", result.reason); }
     });
 
     // --- Always Add Direct Driving Route ---
@@ -519,7 +525,7 @@ export function buildSnappedRouteData(awsRouteData, transitFeatures) {
     } catch(error) { console.error("Error building direct route option:", error); }
 
     // --- Refine/Filter Results (Keep ALL unique options) ---
-    const uniqueOptions = [...finalRouteOptions]; // Keep all generated options initially
+    const uniqueOptions = [...finalRouteOptions];
 
     // Sort options: Prioritize lower duration, then lower fare
     uniqueOptions.sort((a, b) => {

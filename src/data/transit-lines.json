@@ -103,28 +103,6 @@
     {
       "type": "Feature",
       "properties": {
-        "type": "P2P-Bus-Stop",
-        "name": "Market Market"
-      },
-      "geometry": {
-        "type": "Point",
-        "coordinates": [121.055480, 14.548221]
-      }
-    },
-    {
-      "type": "Feature",
-      "properties": {
-        "type": "P2P-Bus-Stop",
-        "name": "Alabang Terminal"
-      },
-      "geometry": {
-        "type": "Point",
-        "coordinates": [121.045944, 14.415551]
-      }
-    },
-    {
-      "type": "Feature",
-      "properties": {
         "name": "Alabang to BGC Bus",
         "type": "P2P-Bus"
       },
@@ -188,8 +166,38 @@
     {
       "type": "Feature",
       "properties": {
+        "type": "P2P-Bus-Stop",
+        "name": "Market Market"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [121.055480, 14.548221]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "type": "P2P-Bus-Stop",
+        "name": "Alabang Terminal"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [121.045944, 14.415551]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
         "name": "One Ayala to Alabang Bus",
-        "type": "Bus"
+        "type": "Bus",
+        "stops": [
+          "One Ayala",
+          "Magallanes",
+          "Bicutan",
+          "Sucat",
+          "Alabang",
+          "Vista Terminal"
+        ]
       },
       "geometry": {
         "type": "LineString",
@@ -237,52 +245,6 @@
     {
       "type": "Feature",
       "properties": {
-        "name": "Alabang to One Ayala Bus",
-        "type": "Bus"
-      },
-      "geometry": {
-        "type": "LineString",
-        "coordinates": [
-          [121.045988, 14.415097],
-          [121.045692, 14.415030],
-          [121.045547, 14.416301],
-          [121.045526, 14.418548],
-          [121.045596, 14.420199],
-          [121.045616, 14.422453],
-          [121.045478, 14.423097],
-          [121.045368, 14.452434],
-          [121.045654, 14.453530],
-          [121.045664, 14.453916],
-          [121.045320, 14.455136],
-          [121.045227, 14.485117],
-          [121.045406, 14.486989],
-          [121.045384, 14.487287],
-          [121.044604, 14.488771],
-          [121.043881, 14.490296],
-          [121.035071, 14.506762],
-          [121.034217, 14.509470],
-          [121.025940, 14.524472],
-          [121.023563, 14.528014],
-          [121.017532, 14.539140],
-          [121.007687, 14.557701],
-          [121.012006, 14.559891],
-          [121.013701, 14.560721],
-          [121.015289, 14.561137],
-          [121.015460, 14.561158],
-          [121.015767, 14.560450],
-          [121.016680, 14.559567],
-          [121.020268, 14.557258],
-          [121.024528, 14.554492],
-          [121.025712, 14.553741],
-          [121.026311, 14.553136],
-          [121.027801, 14.551701],
-          [121.028607, 14.550844]
-        ]
-      }
-    },
-    {
-      "type": "Feature",
-      "properties": {
         "type": "Bus-Stop",
         "name": "One Ayala"
       },
@@ -301,8 +263,7 @@
         "type": "Point",
         "coordinates": [121.020714, 14.543241]
       }
-    },
-    
+    }, 
     {
       "type": "Feature",
       "properties": {
@@ -346,6 +307,66 @@
       "geometry": {
         "type": "Point",
         "coordinates": [121.046093, 14.415060]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Alabang to One Ayala Bus",
+        "type": "Bus",
+        "stops": [
+          "Vista Terminal",
+          "Alabang",
+          "Sucat",
+          "Bicutan",
+          "Magallanes",
+          "Buendia Avenue",
+          "Chino Roces Avenue",
+          "Ayala Avenue",
+          "Paseo De Roxas",
+          "Makati Avenue",
+          "Rustan's",
+          "One Ayala"
+        ]
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [121.045988, 14.415097],
+          [121.045692, 14.415030],
+          [121.045547, 14.416301],
+          [121.045526, 14.418548],
+          [121.045596, 14.420199],
+          [121.045616, 14.422453],
+          [121.045478, 14.423097],
+          [121.045368, 14.452434],
+          [121.045654, 14.453530],
+          [121.045664, 14.453916],
+          [121.045320, 14.455136],
+          [121.045227, 14.485117],
+          [121.045406, 14.486989],
+          [121.045384, 14.487287],
+          [121.044604, 14.488771],
+          [121.043881, 14.490296],
+          [121.035071, 14.506762],
+          [121.034217, 14.509470],
+          [121.025940, 14.524472],
+          [121.023563, 14.528014],
+          [121.017532, 14.539140],
+          [121.007687, 14.557701],
+          [121.012006, 14.559891],
+          [121.013701, 14.560721],
+          [121.015289, 14.561137],
+          [121.015460, 14.561158],
+          [121.015767, 14.560450],
+          [121.016680, 14.559567],
+          [121.020268, 14.557258],
+          [121.024528, 14.554492],
+          [121.025712, 14.553741],
+          [121.026311, 14.553136],
+          [121.027801, 14.551701],
+          [121.028607, 14.550844]
+        ]
       }
     },
     {
@@ -885,7 +906,22 @@
       "type": "Feature",
       "properties": {
         "name": "MRT Line 3",
-        "type": "MRT"
+        "type": "MRT",
+        "stops": [
+          "Taft Avenue",
+          "Magallanes",
+          "Ayala",
+          "Buendia",
+          "Guadalupe",
+          "Boni",
+          "Shaw Boulevard",
+          "Ortigas",
+          "Santolan-Annapolis",
+          "Araneta",
+          "GMA Kamuning",
+          "Quezon Avenue",
+          "North Avenue"
+        ]
       },
       "geometry": {
         "type": "LineString",
@@ -931,8 +967,173 @@
     {
       "type": "Feature",
       "properties": {
+        "type": "MRT-Stop",
+        "name": "Taft Avenue"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [121.001761, 14.537584]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "type": "MRT-Stop",
+        "name": "Magallanes"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [121.019989, 14.542374]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "type": "MRT-Stop",
+        "name": "Ayala"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [121.028052, 14.549125]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "type": "MRT-Stop",
+        "name": "Buendia"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [121.034478, 14.554538]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "type": "MRT-Stop",
+        "name": "Guadalupe"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [121.045559, 14.566978]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "type": "MRT-Stop",
+        "name": "Boni"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [121.048192, 14.573711]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "type": "MRT-Stop",
+        "name": "Shaw Boulevard"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [121.053640, 14.581172]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "type": "MRT-Stop",
+        "name": "Ortigas"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [121.056722, 14.587845]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "type": "MRT-Stop",
+        "name": "Santolan-Annapolis"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [121.056602, 14.607421]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "type": "MRT-Stop",
+        "name": "Araneta"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [121.051130, 14.619356]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "type": "MRT-Stop",
+        "name": "GMA Kamuning"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [121.043398, 14.635186]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "type": "MRT-Stop",
+        "name": "Quezon Avenue"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [121.038469, 14.642652]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "type": "MRT-Stop",
+        "name": "North Avenue"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [121.032307, 14.652188]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
         "name": "LRT Line 1",
-        "type": "LRT1"
+        "type": "LRT1",
+        "stops": [
+          "Baclaran",
+          "EDSA",
+          "Libertad",
+          "Gil Puyat",
+          "Vito Cruz",
+          "Quirino",
+          "Pedro Gil",
+          "UN Avenue",
+          "Central Terminal",
+          "Carriedo",
+          "Doroteo Jose",
+          "Bambang",
+          "Tayuman",
+          "Blumentritt",
+          "Abad Santos",
+          "R. Papa",
+          "5th Avenue",
+          "Monumento",
+          "Balintawak",
+          "Fernando Poe Jr."
+        ]
       },
       "geometry": {
         "type": "LineString",
@@ -1287,151 +1488,22 @@
     {
       "type": "Feature",
       "properties": {
-        "type": "MRT-Stop",
-        "name": "Taft Avenue"
-      },
-      "geometry": {
-        "type": "Point",
-        "coordinates": [121.001761, 14.537584]
-      }
-    },
-    {
-      "type": "Feature",
-      "properties": {
-        "type": "MRT-Stop",
-        "name": "Magallanes"
-      },
-      "geometry": {
-        "type": "Point",
-        "coordinates": [121.019989, 14.542374]
-      }
-    },
-    {
-      "type": "Feature",
-      "properties": {
-        "type": "MRT-Stop",
-        "name": "Ayala"
-      },
-      "geometry": {
-        "type": "Point",
-        "coordinates": [121.028052, 14.549125]
-      }
-    },
-    {
-      "type": "Feature",
-      "properties": {
-        "type": "MRT-Stop",
-        "name": "Buendia"
-      },
-      "geometry": {
-        "type": "Point",
-        "coordinates": [121.034478, 14.554538]
-      }
-    },
-    {
-      "type": "Feature",
-      "properties": {
-        "type": "MRT-Stop",
-        "name": "Guadalupe"
-      },
-      "geometry": {
-        "type": "Point",
-        "coordinates": [121.045559, 14.566978]
-      }
-    },
-    {
-      "type": "Feature",
-      "properties": {
-        "type": "MRT-Stop",
-        "name": "Boni"
-      },
-      "geometry": {
-        "type": "Point",
-        "coordinates": [121.048192, 14.573711]
-      }
-    },
-    {
-      "type": "Feature",
-      "properties": {
-        "type": "MRT-Stop",
-        "name": "Shaw Boulevard"
-      },
-      "geometry": {
-        "type": "Point",
-        "coordinates": [121.053640, 14.581172]
-      }
-    },
-    {
-      "type": "Feature",
-      "properties": {
-        "type": "MRT-Stop",
-        "name": "Ortigas"
-      },
-      "geometry": {
-        "type": "Point",
-        "coordinates": [121.056722, 14.587845]
-      }
-    },
-    {
-      "type": "Feature",
-      "properties": {
-        "type": "MRT-Stop",
-        "name": "Santolan-Annapolis"
-      },
-      "geometry": {
-        "type": "Point",
-        "coordinates": [121.056602, 14.607421]
-      }
-    },
-    {
-      "type": "Feature",
-      "properties": {
-        "type": "MRT-Stop",
-        "name": "Araneta"
-      },
-      "geometry": {
-        "type": "Point",
-        "coordinates": [121.051130, 14.619356]
-      }
-    },
-    {
-      "type": "Feature",
-      "properties": {
-        "type": "MRT-Stop",
-        "name": "GMA Kamuning"
-      },
-      "geometry": {
-        "type": "Point",
-        "coordinates": [121.043398, 14.635186]
-      }
-    },
-    {
-      "type": "Feature",
-      "properties": {
-        "type": "MRT-Stop",
-        "name": "Quezon Avenue"
-      },
-      "geometry": {
-        "type": "Point",
-        "coordinates": [121.038469, 14.642652]
-      }
-    },
-    {
-      "type": "Feature",
-      "properties": {
-        "type": "MRT-Stop",
-        "name": "North Avenue"
-      },
-      "geometry": {
-        "type": "Point",
-        "coordinates": [121.032307, 14.652188]
-      }
-    },
-    {
-      "type": "Feature",
-      "properties": {
         "name": "LRT Line 2",
-        "type": "LRT2"
+        "type": "LRT2",
+        "stops": [
+          "Recto",
+          "Legarda",
+          "Pureza",
+          "V. Mapa",
+          "J. Ruiz",
+          "Gilmore",
+          "Betty Go-Belmonte",
+          "Araneta Center-Cubao",
+          "Katipunan",
+          "Santolan",
+          "Marikina-Pasig",
+          "Antipolo"
+        ]
       },
       "geometry": {
         "type": "LineString",
@@ -1652,7 +1724,58 @@
       "type": "Feature",
       "properties": {
         "name": "PITX to Fairview Bus",
-        "type": "Bus"
+        "type": "Bus",
+        "stops": [
+          "PITX",
+          "NAIA",
+          "Roxas",
+          "City Of Dreams",
+          "Airport Road",
+          "Baclaran Market",
+          "Heritage Hotel",
+          "Antonio Arnaiz",
+          "Gil Puyat",
+          "Manila Hospital",
+          "Quirino",
+          "Pedro Gil",
+          "PGH",
+          "Padre Faura",
+          "United Nations",
+          "Ayala Boulevard",
+          "Lawton",
+          "Quiapo",
+          "Morayta",
+          "UST Hospital",
+          "Vicente Cruz",
+          "Antonio Maceda",
+          "Blumentritt",
+          "Rotonda",
+          "D. Tuazon",
+          "Banawe",
+          "Araneta Avenue",
+          "Fisher Mall",
+          "Timog Avenue",
+          "Lung Center",
+          "Philcoa",
+          "Techno Hub",
+          "Central Avenue",
+          "Tandang Sora",
+          "Luzon Avenue",
+          "Diliman Doctor's Hospital",
+          "Ever Gotesco",
+          "Batasan",
+          "Commission On Audit",
+          "Manggahan",
+          "Litex",
+          "Puregold North Commonwealth",
+          "Pearl Drive",
+          "Atherton",
+          "Everlasting",
+          "Regalado Highway",
+          "Largo",
+          "Quirino Highway",
+          "SM Fairview"
+        ]
       },
       "geometry": {
         "type": "LineString",
@@ -2335,7 +2458,58 @@
       "type": "Feature",
       "properties": {
         "name": "Fairview to PITX Bus",
-        "type": "Bus"
+        "type": "Bus",
+        "stops": [
+          "SM Fairview",
+          "Quirino Highway",
+          "Largo",
+          "Regalado Highway",
+          "Everlasting",
+          "Atherton",
+          "Pearl Drive",
+          "Puregold North Commonwealth",
+          "Litex",
+          "Manggahan",
+          "Commission On Audit",
+          "Batasan",
+          "Ever Gotesco",
+          "Diliman Doctor's Hospital",
+          "Luzon Avenue",
+          "Tandang Sora",
+          "Central Avenue",
+          "Techno Hub",
+          "Philcoa",
+          "Lung Center",
+          "Timog Avenue",
+          "Fisher Mall",
+          "Araneta Avenue",
+          "Banawe",
+          "D. Tuazon",
+          "Rotonda",
+          "Blumentritt",
+          "Antonio Maceda",
+          "Vicente Cruz",
+          "UST Hospital",
+          "Morayta",
+          "Quiapo",
+          "Lawton",
+          "Ayala Boulevard",
+          "United Nations",
+          "Padre Faura",
+          "PGH",
+          "Pedro Gil",
+          "Quirino",
+          "Manila Hospital",
+          "Gil Puyat",
+          "Antonio Arnaiz",
+          "Heritage Hotel",
+          "Baclaran Market",
+          "Airport Road",
+          "City Of Dreams",
+          "Roxas",
+          "NAIA",
+          "PITX"
+        ]
       },
       "geometry": {
         "type": "LineString",
@@ -3133,7 +3307,32 @@
       "type": "Feature",
       "properties": {
         "name": "EDSA Carousel South Bus",
-        "type": "Bus"
+        "type": "Bus",
+        "stops": [
+          "MCU Monumento",
+          "Bagong Barrio",
+          "Balintawak",
+          "Kaingin",
+          "Roosevelt",
+          "SM North EDSA",
+          "North Avenue",
+          "Philam QC",
+          "Quezon Avenue",
+          "Kamuning",
+          "Nepa-Q Mart",
+          "Main Avenue",
+          "Santolan",
+          "Ortigas",
+          "Guadalupe",
+          "Buendia",
+          "One Ayala",
+          "Taft",
+          "Roxas Boulevard",
+          "Mall Of Asia",
+          "DFA",
+          "Ayala Manila Bay",
+          "PITX"
+        ]
       },
       "geometry": {
         "type": "LineString",
@@ -3475,7 +3674,31 @@
       "type": "Feature",
       "properties": {
         "name": "EDSA Carousel North Bus",
-        "type": "Bus"
+        "type": "Bus",
+        "stops": [
+          "PITX",
+          "City Of Dreams",
+          "DFA",
+          "Roxas Boulevard",
+          "Taft",
+          "One Ayala",
+          "Buendia",
+          "Guadalupe",
+          "Ortigas",
+          "Santolan",
+          "Main Avenue",
+          "Nepa-Q Mart",
+          "Kamuning",
+          "Quezon Avenue",
+          "Philam QC",
+          "North Avenue",
+          "SM North EDSA",
+          "Roosevelt",
+          "Kaingin",
+          "Balintawak",
+          "Bagong Barrio",
+          "MCU Monumento"
+        ]
       },
       "geometry": {
         "type": "LineString",
