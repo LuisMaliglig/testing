@@ -910,7 +910,7 @@
         "stops": [
           "Taft Avenue",
           "Magallanes",
-          "Ayala",
+          "One Ayala",
           "Buendia",
           "Guadalupe",
           "Boni",
@@ -990,7 +990,7 @@
       "type": "Feature",
       "properties": {
         "type": "MRT-Stop",
-        "name": "Ayala"
+        "name": "One Ayala"
       },
       "geometry": {
         "type": "Point",
@@ -1113,6 +1113,11 @@
         "name": "LRT Line 1",
         "type": "LRT1",
         "stops": [
+          "Dr. Santos",
+          "Ninoy Aquino Avenue", 
+          "PITX",
+          "MIA Road",
+          "Redemptorist-Aseana",
           "Baclaran",
           "EDSA",
           "Libertad",
@@ -1164,14 +1169,14 @@
           [121.000164, 14.536732],
           [121.000614, 14.537703],
           [121.000680, 14.538377],
-          [121.000562, 14.538919],
-          [120.998542, 14.547734],
-          [120.997097, 14.554045],
+          [121.000562, 14.538919], 
+          [120.998542, 14.547734], 
+          [120.997097, 14.554045], 
           [120.995167, 14.562381],
-          [120.994635, 14.563677],
-          [120.991474, 14.570285],
-          [120.987973, 14.576495],
-          [120.984651, 14.582390],
+          [120.994635, 14.563677], 
+          [120.991474, 14.570285], 
+          [120.987973, 14.576495], 
+          [120.984651, 14.582390], 
           [120.982185, 14.586695],
           [120.981943, 14.587389],
           [120.982083, 14.588632],
@@ -1184,10 +1189,10 @@
           [120.981187, 14.598651],
           [120.981261, 14.599183],
           [120.981762, 14.602440],
-          [120.981955, 14.605361],
-          [120.982379, 14.611112],
+          [120.981955, 14.605361], 
+          [120.982379, 14.611112], 
           [120.982542, 14.613145],
-          [120.982640, 14.616800],
+          [120.982640, 14.616800], 
           [120.982807, 14.622672],
           [120.982954, 14.628212],
           [120.982845, 14.628770],
@@ -1204,7 +1209,7 @@
           [120.983853, 14.656276],
           [120.984211, 14.656853],
           [120.985216, 14.657156],
-          [120.993884, 14.657442],
+          [121.004056, 14.657505],
           [121.020107, 14.657692],
           [121.021089, 14.657557]
         ]
@@ -1229,7 +1234,7 @@
       },
       "geometry": {
         "type": "Point",
-        "coordinates": [120.994359, 14.499034]
+        "coordinates": [121.000562, 14.538919]
       }
     },
     {
@@ -1240,61 +1245,6 @@
       },
       "geometry": {
         "type": "Point",
-        "coordinates": [120.991220, 14.508216]
-      }
-    },
-    {
-      "type": "Feature",
-      "properties": {
-        "type": "LRT1-Stop",
-        "name": "Cuneta"
-      },
-      "geometry": {
-        "type": "Point",
-        "coordinates": [120.992904, 14.518250]
-      }
-    },
-    {
-      "type": "Feature",
-      "properties": {
-        "type": "LRT1-Stop",
-        "name": "Boys Town"
-      },
-      "geometry": {
-        "type": "Point",
-        "coordinates": [120.992938, 14.530042]
-      }
-    },
-    {
-      "type": "Feature",
-      "properties": {
-        "type": "LRT1-Stop",
-        "name": "MIA"
-      },
-      "geometry": {
-        "type": "Point",
-        "coordinates": [120.998376, 14.534304]
-      }
-    },
-    {
-      "type": "Feature",
-      "properties": {
-        "type": "LRT1-Stop",
-        "name": "NAIA"
-      },
-      "geometry": {
-        "type": "Point",
-        "coordinates": [121.000562, 14.538919]
-      }
-    },
-    {
-      "type": "Feature",
-      "properties": {
-        "type": "LRT1-Stop",
-        "name": "Tambo"
-      },
-      "geometry": {
-        "type": "Point",
         "coordinates": [120.998542, 14.547734]
       }
     },
@@ -1302,29 +1252,29 @@
       "type": "Feature",
       "properties": {
         "type": "LRT1-Stop",
-        "name": "Bicutan"
+        "name": "Gil Puyat"
       },
       "geometry": {
         "type": "Point",
         "coordinates": [120.997097, 14.554045]
       }
     },
-    {
+     {
       "type": "Feature",
       "properties": {
         "type": "LRT1-Stop",
-        "name": "Sucat"
+        "name": "Vito Cruz"
       },
       "geometry": {
         "type": "Point",
         "coordinates": [120.994635, 14.563677]
       }
     },
-    {
+     {
       "type": "Feature",
       "properties": {
         "type": "LRT1-Stop",
-        "name": "Dr. Santos"
+        "name": "Quirino" 
       },
       "geometry": {
         "type": "Point",
@@ -1335,7 +1285,7 @@
       "type": "Feature",
       "properties": {
         "type": "LRT1-Stop",
-        "name": "Marikina"
+        "name": "Pedro Gil"
       },
       "geometry": {
         "type": "Point",
@@ -1346,106 +1296,106 @@
       "type": "Feature",
       "properties": {
         "type": "LRT1-Stop",
-        "name": "Paco"
+        "name": "UN Avenue" 
       },
       "geometry": {
         "type": "Point",
         "coordinates": [120.984651, 14.582390]
       }
     },
-    {
+     {
       "type": "Feature",
       "properties": {
         "type": "LRT1-Stop",
-        "name": "Santolan"
+        "name": "Central Terminal" 
       },
       "geometry": {
         "type": "Point",
         "coordinates": [120.981554, 14.592765]
       }
     },
-    {
+     {
       "type": "Feature",
       "properties": {
         "type": "LRT1-Stop",
-        "name": "Tandang Sora"
+        "name": "Carriedo" 
       },
       "geometry": {
         "type": "Point",
         "coordinates": [120.981261, 14.599183]
       }
     },
-    {
+     {
       "type": "Feature",
       "properties": {
         "type": "LRT1-Stop",
-        "name": "Tundo"
+        "name": "Doroteo Jose"
       },
       "geometry": {
         "type": "Point",
         "coordinates": [120.981955, 14.605361]
       }
     },
-    {
+     {
       "type": "Feature",
       "properties": {
         "type": "LRT1-Stop",
-        "name": "Tandang Tundo"
+        "name": "Bambang" 
       },
       "geometry": {
         "type": "Point",
         "coordinates": [120.982379, 14.611112]
       }
     },
-    {
+     {
       "type": "Feature",
       "properties": {
         "type": "LRT1-Stop",
-        "name": "Recto"
+        "name": "Tayuman" 
       },
       "geometry": {
         "type": "Point",
         "coordinates": [120.982640, 14.616800]
       }
     },
-    {
+     {
       "type": "Feature",
       "properties": {
         "type": "LRT1-Stop",
-        "name": "Sta. Mesa"
+        "name": "Blumentritt"
       },
       "geometry": {
         "type": "Point",
         "coordinates": [120.982807, 14.622672]
       }
     },
-    {
+     {
       "type": "Feature",
       "properties": {
         "type": "LRT1-Stop",
-        "name": "San Lazaro"
+        "name": "Abad Santos" 
       },
       "geometry": {
         "type": "Point",
         "coordinates": [120.981237, 14.630711]
       }
     },
-    {
+     {
       "type": "Feature",
       "properties": {
         "type": "LRT1-Stop",
-        "name": "Quezon"
+        "name": "R. Papa" 
       },
       "geometry": {
         "type": "Point",
         "coordinates": [120.982199, 14.636070]
       }
     },
-    {
+     {
       "type": "Feature",
       "properties": {
         "type": "LRT1-Stop",
-        "name": "Espanya"
+        "name": "5th Avenue"
       },
       "geometry": {
         "type": "Point",
@@ -1456,29 +1406,29 @@
       "type": "Feature",
       "properties": {
         "type": "LRT1-Stop",
-        "name": "La Loma"
+        "name": "Monumento"
       },
       "geometry": {
         "type": "Point",
-        "coordinates": [120.983797, 14.654383]
+        "coordinates": [120.983797, 14.654383] 
       }
     },
     {
       "type": "Feature",
       "properties": {
         "type": "LRT1-Stop",
-        "name": "Tondo"
+        "name": "Balintawak" 
       },
       "geometry": {
         "type": "Point",
-        "coordinates": [120.993884, 14.657442]
+        "coordinates": [121.004056, 14.657505]
       }
     },
     {
       "type": "Feature",
       "properties": {
         "type": "LRT1-Stop",
-        "name": "End of Line"
+        "name": "Fernando Poe Jr." 
       },
       "geometry": {
         "type": "Point",
@@ -3416,7 +3366,7 @@
           [120.99100163208682, 14.510577166389114]
         ]
       }
-    },
+    },    
     {
       "type": "Feature",
       "properties": {

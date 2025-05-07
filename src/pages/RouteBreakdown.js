@@ -12,7 +12,6 @@ const modeColors = {
     MRT: "#facc15", // Yellow-400
     LRT1: "#22c55e", // Green-500
     LRT2: "#7A07D1", // Purple
-    LRT: "#22c55e",   // Fallback LRT
     Jeep: "#FFA500", // Orange
     "P2P-Bus": "#f97316", // Orange-500
     Bus: "#3b82f6", // Blue-500
@@ -50,72 +49,42 @@ const RouteBreakdown = () => {
     const {
         origin = 'Unknown Origin',
         destination = 'Unknown Destination',
-        suggestedRoutes: initialSuggestedRoutes = [], // Rename to avoid conflict
+        suggestedRoutes: initialSuggestedRoutes = [],
         selectedRouteIndex = 0,
         awsRouteData = null,
     } = location.state || {};
 
     // --- State ---
-    // Store the original, unsorted list
     const [originalRoutes] = useState(initialSuggestedRoutes);
-    // State for sorting criteria
-    const [sortBy, setSortBy] = useState('duration'); // 'duration', 'distance', 'fare'
-    // State for the index of the currently selected route *in the sorted list*
+    const [sortBy, setSortBy] = useState('duration');
     const [currentlySelectedIdx, setCurrentlySelectedIdx] = useState(selectedRouteIndex);
-    // State to track the label of the selected route to maintain selection across sorts
     const [selectedRouteLabelState, setSelectedRouteLabelState] = useState(() =>
         initialSuggestedRoutes[selectedRouteIndex]?.properties?.label || null
     );
-
-    // State for the details of the *currently viewed* route
     const [currentSegments, setCurrentSegments] = useState([]);
     const [currentSteps, setCurrentSteps] = useState([]);
     const [currentRouteLabel, setCurrentRouteLabel] = useState("Loading...");
     const [currentRouteProps, setCurrentRouteProps] = useState(null);
-    const [isMapLoaded, setIsMapLoaded] = useState(false); // Track map load status
-    // State for map features derived from selected route
+    const [isMapLoaded, setIsMapLoaded] = useState(false);
     const [mapFeatures, setMapFeatures] = useState({ type: 'FeatureCollection', features: [] });
-    // *** NEW: State to track expanded segment ***
     const [expandedSegmentIndex, setExpandedSegmentIndex] = useState(null);
 
     // --- Sorting Logic ---
     const sortedSuggestedRoutes = useMemo(() => {
         if (!Array.isArray(originalRoutes)) return [];
-        // Create a copy before sorting to avoid mutating original state/props
         const routesToSort = [...originalRoutes];
-
         routesToSort.sort((a, b) => {
-            const propsA = a?.properties;
-            const propsB = b?.properties;
+            const propsA = a?.properties; const propsB = b?.properties;
             let valA = Infinity, valB = Infinity;
-
             switch (sortBy) {
-                case 'distance':
-                    valA = propsA?.summary_distance ?? Infinity;
-                    valB = propsB?.summary_distance ?? Infinity;
-                    break;
-                case 'fare':
-                    valA = propsA?.total_fare ?? Infinity;
-                    valB = propsB?.total_fare ?? Infinity;
-                    break;
-                case 'duration':
-                default:
-                    valA = propsA?.summary_duration ?? Infinity;
-                    valB = propsB?.summary_duration ?? Infinity;
-                    break;
+                case 'distance': valA = propsA?.summary_distance ?? Infinity; valB = propsB?.summary_distance ?? Infinity; break;
+                case 'fare': valA = propsA?.total_fare ?? Infinity; valB = propsB?.total_fare ?? Infinity; break;
+                default: valA = propsA?.summary_duration ?? Infinity; valB = propsB?.summary_duration ?? Infinity; break;
             }
-            // Handle potential non-numeric values safely
-            if (isNaN(valA)) valA = Infinity;
-            if (isNaN(valB)) valB = Infinity;
-
-            if (valA !== valB) {
-                 return valA - valB; // Primary sort
-            }
-            // Secondary sort by duration if primary values are equal
-            let durationA = propsA?.summary_duration ?? Infinity;
-            let durationB = propsB?.summary_duration ?? Infinity;
-             if (isNaN(durationA)) durationA = Infinity;
-             if (isNaN(durationB)) durationB = Infinity;
+            if (isNaN(valA)) valA = Infinity; if (isNaN(valB)) valB = Infinity;
+            if (valA !== valB) { return valA - valB; }
+            let durationA = propsA?.summary_duration ?? Infinity; let durationB = propsB?.summary_duration ?? Infinity;
+            if (isNaN(durationA)) durationA = Infinity; if (isNaN(durationB)) durationB = Infinity;
             return durationA - durationB;
         });
         return routesToSort;
@@ -126,175 +95,118 @@ const RouteBreakdown = () => {
         if (selectedRouteLabelState) {
             const newIndex = sortedSuggestedRoutes.findIndex(route => route?.properties?.label === selectedRouteLabelState);
             if (newIndex !== -1 && newIndex !== currentlySelectedIdx) {
-                console.log(`Sort changed. Updating selected index for label "${selectedRouteLabelState}" from ${currentlySelectedIdx} to ${newIndex}`);
                 setCurrentlySelectedIdx(newIndex);
-            } else if (newIndex === -1 && sortedSuggestedRoutes.length > 0) { // Check length before accessing index 0
-                // Previously selected route might not exist after filtering/sorting? Reset.
-                console.warn(`Previously selected route label "${selectedRouteLabelState}" not found after sorting. Resetting index.`);
-                setCurrentlySelectedIdx(0); // Default to first item
-                setSelectedRouteLabelState(sortedSuggestedRoutes[0]?.properties?.label || null); // Update label state
+            } else if (newIndex === -1 && sortedSuggestedRoutes.length > 0) {
+                setCurrentlySelectedIdx(0);
+                setSelectedRouteLabelState(sortedSuggestedRoutes[0]?.properties?.label || null);
             } else if (newIndex === -1 && sortedSuggestedRoutes.length === 0) {
-                 // Handle case where sorting results in empty list
-                 setCurrentlySelectedIdx(0); // Or -1?
-                 setSelectedRouteLabelState(null);
+                 setCurrentlySelectedIdx(0); setSelectedRouteLabelState(null);
             }
         } else if (sortedSuggestedRoutes.length > 0) {
-             // If no label was selected, default to the first item in the newly sorted list
              setCurrentlySelectedIdx(0);
              setSelectedRouteLabelState(sortedSuggestedRoutes[0]?.properties?.label || null);
         }
-    // Avoid infinite loops by ensuring currentlySelectedIdx is only set when necessary
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [sortedSuggestedRoutes, selectedRouteLabelState]); // Removed currentlySelectedIdx dependency
+    }, [sortedSuggestedRoutes, selectedRouteLabelState]);
 
     // --- Function to clear stop markers ---
     const clearStopMarkers = useCallback(() => {
         stopMarkersRef.current.forEach(marker => marker.remove());
         stopMarkersRef.current = [];
-    }, []); // No dependencies needed
+    }, []);
 
     // --- Initialize Map ---
     useEffect(() => {
-        // Add Material Icons font link if not present
         const iconsLink = document.getElementById('material-icons-link');
         if (!iconsLink) {
-             const link = document.createElement('link');
-             link.id = 'material-icons-link';
+             const link = document.createElement('link'); link.id = 'material-icons-link';
              link.href = 'https://fonts.googleapis.com/icon?family=Material+Icons';
-             link.rel = 'stylesheet';
-             document.head.appendChild(link);
+             link.rel = 'stylesheet'; document.head.appendChild(link);
         }
-
         if (!mapContainerRef.current) return;
-        let isMounted = true; // Flag for cleanup check
-
+        let isMounted = true;
         const map = new maplibregl.Map({
-            container: mapContainerRef.current,
-            style: `https://maps.geo.${awsConfig.region}.amazonaws.com/maps/v0/maps/${awsConfig.mapName}/style-descriptor?key=${awsConfig.apiKey}`,
-            center: [121.0357, 14.4981], // Initial center
-            zoom: 11,
+             container: mapContainerRef.current,
+             style: `https://maps.geo.${awsConfig.region}.amazonaws.com/maps/v0/maps/${awsConfig.mapName}/style-descriptor?key=${awsConfig.apiKey}`,
+             center: [121.0357, 14.4981], zoom: 11,
         });
         mapRef.current = map;
-
-        map.once('load', () => { // Use 'once' if setup only needs to happen once
+        map.once('load', () => {
             if (!mapRef.current || !isMounted) return;
-            console.log("Map 'load' event fired. Setting up sources/layers.");
-            // Set map loaded state to true
+            console.log("Map 'load' event fired.");
             setIsMapLoaded(true);
-
-            // Setup Source and Layers for Segments
             if (!mapRef.current.getSource('route-segments')) {
-                mapRef.current.addSource('route-segments', {
-                    type: 'geojson',
-                    data: { type: 'FeatureCollection', features: [] }
-                });
-                console.log("Map source 'route-segments' added.");
+                mapRef.current.addSource('route-segments', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
             }
-
             Object.keys(modeColors).forEach(mode => {
-                const layerId = `route-segment-${mode}`;
-                if (!mapRef.current.getLayer(layerId)) {
-                    mapRef.current.addLayer({
-                        id: layerId, type: 'line', source: 'route-segments',
-                        filter: ['==', ['get', 'mode'], mode],
-                        layout: { 'line-join': 'round', 'line-cap': 'round' },
-                        paint: {
-                            'line-color': modeColors[mode] || '#888', // Fallback color
-                            'line-width': mode === 'Walk' ? 4 : 6,
-                            'line-opacity': 0.85,
-                            ...(mode === 'Walk' && { 'line-dasharray': [2, 2] })
-                        }
-                    });
+                if (!mode.includes("-Stop")) { // Only add line layers here
+                    const layerId = `route-segment-${mode}`;
+                    if (!mapRef.current.getLayer(layerId)) {
+                        mapRef.current.addLayer({
+                            id: layerId, type: 'line', source: 'route-segments',
+                            filter: ['==', ['get', 'mode'], mode],
+                            layout: { 'line-join': 'round', 'line-cap': 'round' },
+                            paint: {
+                                'line-color': modeColors[mode] || '#888',
+                                'line-width': mode === 'Walk' ? 4 : 6,
+                                'line-opacity': 0.85,
+                                ...(mode === 'Walk' && { 'line-dasharray': [2, 2] })
+                            }
+                        });
+                    }
                 }
             });
             console.log("Segment layers added/verified.");
         });
-
         map.on('error', (e) => console.error("MapLibre Error:", e));
-
         return () => {
             isMounted = false;
-            if (mapRef.current) {
-                if (mapRef.current.getStyle()) { /* No listeners to remove here */ }
-                mapRef.current.remove();
-                mapRef.current = null;
-            }
-            clearStopMarkers(); // Clear markers on unmount
+            if (mapRef.current) { mapRef.current.remove(); mapRef.current = null; }
+            clearStopMarkers();
         };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []); // Map initialization runs once
+    }, []);
 
-    // --- Load/Update Route Details (UI State & Prepare Map Features) ---
+    // --- Load/Update Route Details ---
     useEffect(() => {
-        // Use sortedSuggestedRoutes here
-        if (!Array.isArray(sortedSuggestedRoutes) || sortedSuggestedRoutes.length === 0) {
-             console.warn("No suggested routes available.");
-             setCurrentSegments([]); setCurrentSteps([]); setCurrentRouteLabel("No routes found."); setCurrentRouteProps(null);
-             setMapFeatures({ type: 'FeatureCollection', features: [] }); return;
-         }
-        // Use currentlySelectedIdx which is synced with sorted list
-        if (currentlySelectedIdx < 0 || currentlySelectedIdx >= sortedSuggestedRoutes.length) {
-             console.warn(`Selected index ${currentlySelectedIdx} out of bounds. List length: ${sortedSuggestedRoutes.length}. Resetting.`);
-             // Reset to 0 only if list is not empty
-             setCurrentlySelectedIdx(sortedSuggestedRoutes.length > 0 ? 0 : -1); // Use -1 or 0?
-             return;
-        }
+        if (!Array.isArray(sortedSuggestedRoutes) || sortedSuggestedRoutes.length === 0) { /*...*/ return; }
+        if (currentlySelectedIdx < 0 || currentlySelectedIdx >= sortedSuggestedRoutes.length) { /*...*/ return; }
         const selectedRoute = sortedSuggestedRoutes[currentlySelectedIdx];
-
-        if (!selectedRoute?.properties?.segments || !selectedRoute?.properties?.label) {
-             console.error("Selected route object (index " + currentlySelectedIdx + ") is invalid.", selectedRoute);
-             setCurrentSegments([]); setCurrentSteps([]); setCurrentRouteLabel("Invalid route data"); setCurrentRouteProps(null);
-             setMapFeatures({ type: 'FeatureCollection', features: [] }); return;
-        }
+        if (!selectedRoute?.properties?.segments || !selectedRoute?.properties?.label) { /*...*/ return; }
 
         console.log(`Loading details for sorted index ${currentlySelectedIdx}: ${selectedRoute.properties.label}`);
         setCurrentRouteLabel(selectedRoute.properties.label);
         setCurrentRouteProps(selectedRoute.properties);
-        // Don't set selectedRouteLabelState here, it's handled by onClick and the sync effect
 
-        // 1. Update Segments state for UI
         const segmentsForUI = selectedRoute.properties.segments.filter(seg => seg && typeof seg.mode === 'string');
         setCurrentSegments(segmentsForUI);
 
-        // 2. Update AWS Steps state
         if (selectedRoute.properties.primary_mode === 'Driving' && Array.isArray(awsRouteData?.Legs?.[0]?.Steps)) {
             setCurrentSteps(awsRouteData.Legs[0].Steps);
-        } else {
-            setCurrentSteps([]);
-        }
+        } else { setCurrentSteps([]); }
 
-        // 3. Prepare Features for the Map (update mapFeatures state)
          const segmentFeatures = selectedRoute.properties.segments
-             .map((seg, index) => {
-                 // console.log(`Checking segment ${index} (mode: ${seg?.mode}):`, JSON.stringify(seg));
-                 // console.log(` -> Geometry object for segment ${index}:`, seg?.geometry);
-
+             .map((seg) => {
                  if (seg?.geometry && seg.geometry.type === 'LineString' && Array.isArray(seg.geometry.coordinates) && seg.geometry.coordinates.length >= 2) {
-                     return {
-                         type: 'Feature',
-                         geometry: seg.geometry,
-                         properties: { mode: seg.mode || 'Unknown', label: seg.label, }
-                     };
-                 } else {
-                     console.warn(`Segment ${index} (mode: ${seg?.mode}) has invalid geometry structure or coordinates. Skipping map feature.`);
-                     return null;
-                 }
+                     return { type: 'Feature', geometry: seg.geometry, properties: { mode: seg.mode || 'Unknown', label: seg.label } };
+                 } return null;
              })
              .filter(feature => feature !== null);
          setMapFeatures({ type: 'FeatureCollection', features: segmentFeatures });
          console.log(`Prepared ${segmentFeatures.length} features for map.`);
-         // Reset expanded segment when route changes
          setExpandedSegmentIndex(null);
-         // Clear old stop markers when route changes (will be added back if segment expanded)
          clearStopMarkers();
 
-    }, [currentlySelectedIdx, sortedSuggestedRoutes, awsRouteData, clearStopMarkers]); // Added clearStopMarkers
+    }, [currentlySelectedIdx, sortedSuggestedRoutes, awsRouteData, clearStopMarkers]);
 
 
-    // --- Function to add stop markers ---
-    const addStopMarkers = useCallback((stopSequence) => {
-        if (!mapRef.current || !Array.isArray(stopSequence)) return;
-        clearStopMarkers(); // Clear existing markers first
+    // --- Function to add stop markers based on segment geometry and mode ---
+    const addStopMarkersForSegment = useCallback((segmentGeometry, segmentMode, stopSequence) => {
+        if (!mapRef.current || !segmentGeometry || !segmentMode || !Array.isArray(stopSequence) || stopSequence.length === 0) {
+            console.log("Skipping addStopMarkers: Missing map, geometry, mode, or stopSequence.");
+            return;
+        }
+        clearStopMarkers();
 
         // Find the corresponding stop features from the main transit data
         const stopFeatures = stopSequence.map(stopName =>
@@ -307,23 +219,23 @@ const RouteBreakdown = () => {
             const el = document.createElement('div');
             el.className = 'stop-marker';
             // Determine color based on stop type, fallback to gray
-            const stopTypeColor = modeColors[stopFeature.properties.type] || '#888';
+            const stopTypeColor = modeColors[stopFeature.properties.type] || modeColors[segmentMode] ||'#888';
             el.style.backgroundColor = stopTypeColor;
-            el.style.width = '12px';
-            el.style.height = '12px';
+            el.style.width = '10px'; // Slightly smaller markers for stops
+            el.style.height = '10px';
             el.style.borderRadius = '50%';
-            el.style.border = '2px solid white';
-            el.style.boxShadow = '0 0 5px rgba(0,0,0,0.5)';
-            el.style.cursor = 'pointer';
+            el.style.border = '1.5px solid white';
+            el.style.boxShadow = '0 0 4px rgba(0,0,0,0.6)';
             el.title = `${index + 1}. ${stopFeature.properties.name}`; // Add tooltip
 
             const marker = new maplibregl.Marker(el)
                 .setLngLat(stopFeature.geometry.coordinates)
                 .addTo(mapRef.current);
-            stopMarkersRef.current.push(marker); // Store reference for removal
+            stopMarkersRef.current.push(marker);
         });
-        console.log(`Added ${stopMarkersRef.current.length} stop markers to map.`);
-    }, [clearStopMarkers]); // Dependency on clearStopMarkers
+        console.log(`Added ${stopMarkersRef.current.length} stop markers for the segment.`);
+    }, [clearStopMarkers]);
+
 
     // --- Update Map View (Route Lines) ---
     useEffect(() => {
@@ -360,27 +272,21 @@ const RouteBreakdown = () => {
 
     // --- Effect to handle stop markers when segment expands/collapses ---
     useEffect(() => {
-        if (!isMapLoaded || !mapRef.current || !mapRef.current.isStyleLoaded()) {
-            // console.log("Map not ready for stop marker update");
-            return; // Ensure map is ready
-        }
+        if (!isMapLoaded || !mapRef.current || !mapRef.current.isStyleLoaded()) { return; }
 
         if (expandedSegmentIndex !== null && currentSegments[expandedSegmentIndex]) {
             const segment = currentSegments[expandedSegmentIndex];
-            // Use the fullStopSequence property which should now exist
             if (Array.isArray(segment.fullStopSequence) && segment.fullStopSequence.length > 0) {
                 console.log("Adding markers for stops:", segment.fullStopSequence);
-                addStopMarkers(segment.fullStopSequence);
+                addStopMarkersForSegment(segment.geometry, segment.mode, segment.fullStopSequence);
             } else {
                 console.log("No stop sequence found for expanded segment, clearing markers.");
-                clearStopMarkers(); // Clear if no sequence found
+                clearStopMarkers();
             }
         } else {
-            // console.log("No segment expanded, clearing markers.");
-            clearStopMarkers(); // Clear markers when no segment is expanded
+            clearStopMarkers();
         }
-        // Cleanup function is implicitly handled by the next run or component unmount
-    }, [expandedSegmentIndex, currentSegments, isMapLoaded, addStopMarkers, clearStopMarkers]); // Rerun when expanded segment changes
+    }, [expandedSegmentIndex, currentSegments, isMapLoaded, addStopMarkersForSegment, clearStopMarkers]);
 
 
     // --- Calculate Display Values ---
@@ -398,7 +304,7 @@ const RouteBreakdown = () => {
 
     // --- Handler for clicking a segment ---
     const handleSegmentClick = (index) => {
-        setExpandedSegmentIndex(prevIndex => prevIndex === index ? null : index); // Toggle expansion
+        setExpandedSegmentIndex(prevIndex => prevIndex === index ? null : index);
     };
 
 
@@ -438,7 +344,7 @@ const RouteBreakdown = () => {
                             <label htmlFor="sort-select" style={{ fontSize: '0.9rem', fontWeight: '600', color: '#d1d5db' }}>Sort by:</label>
                             <select
                                 id="sort-select" value={sortBy} onChange={handleSortChange}
-                                style={{ backgroundColor: 'rgba(255, 255, 255, 0.1)', color: 'white', /* Changed select text to white */
+                                style={{ backgroundColor: 'rgba(255, 255, 255, 0.1)', color: 'white',
                                          border: '1px solid rgba(255, 255, 255, 0.3)', borderRadius: '4px', padding: '5px 8px',
                                          fontSize: '0.85rem', flexGrow: 1 }} >
                                 <option style={{ color: 'black', backgroundColor: 'white' }} value="duration">Fastest</option>
@@ -510,7 +416,7 @@ const RouteBreakdown = () => {
 
                            {/* Steps Display */}
                            {currentSteps.length > 0 ? ( // Driving Steps
-                               <div style={{ backgroundColor: "rgba(255, 255, 255, 0.08)", borderRadius: "5px", padding: "12px 16px", marginBottom: "5px", textAlign: "left", maxHeight: 'calc(100vh - 500px)', /* Adjust max height */ overflowY: 'auto' }}>
+                               <div style={{ backgroundColor: "rgba(255, 255, 255, 0.08)", borderRadius: "5px", padding: "12px 16px", marginBottom: "5px", textAlign: "left", maxHeight: 'calc(100vh - 500px)', overflowY: 'auto' }}>
                                    <h3 style={{ fontSize: "1.0rem", marginBottom: "10px", fontWeight: '600' }}>Driving Steps</h3>
                                    {currentSteps.map((step, idx) => (
                                        <div key={idx} style={{ display: "flex", alignItems: "center", marginBottom: "8px", fontSize: '0.85rem' }}>
@@ -520,37 +426,31 @@ const RouteBreakdown = () => {
                                    ))}
                                </div>
                            ) : currentSegments.length > 0 && currentRouteProps?.primary_mode !== 'Driving' ? ( // Transit Segments
-                               <div style={{ backgroundColor: "rgba(255, 255, 255, 0.08)", borderRadius: "5px", padding: "12px 16px", marginBottom: "5px", textAlign: "left", maxHeight: 'calc(100vh - 500px)', /* Adjust max height */ overflowY: 'auto' }}>
+                               <div style={{ backgroundColor: "rgba(255, 255, 255, 0.08)", borderRadius: "5px", padding: "12px 16px", marginBottom: "5px", textAlign: "left", maxHeight: 'calc(100vh - 500px)', overflowY: 'auto' }}>
                                    <h3 style={{ fontSize: "1.0rem", marginBottom: "10px", fontWeight: '600' }}>Transit Segments</h3>
                                    {currentSegments.map((seg, idx) => {
                                         if (!seg || !seg.mode) return <div key={`invalid-detail-${idx}`} style={{color: 'red', fontSize: '0.85rem'}}>Invalid segment data</div>;
                                         const isExpanded = expandedSegmentIndex === idx;
-                                        // Use fullStopSequence for check
                                         const hasStopsToShow = Array.isArray(seg.fullStopSequence) && seg.fullStopSequence.length > 0;
                                         const isTransit = seg.mode !== 'Walk' && seg.mode !== 'Driving';
 
                                         return (
                                             <div key={`seg-detail-${idx}`} style={{ marginBottom: "8px", borderLeft: `3px solid ${modeColors[seg.mode] || '#ccc'}`, paddingLeft: '8px' }}>
-                                                {/* Main segment info (clickable for transit) */}
                                                 <div onClick={isTransit ? () => handleSegmentClick(idx) : undefined}
                                                      style={{ display: "flex", alignItems: "center", fontSize: '0.85rem', cursor: isTransit ? 'pointer' : 'default', padding: '5px 0' }} >
                                                     <span className="material-icons" style={{ marginRight: '8px', color: modeColors[seg.mode] || '#ccc', fontSize: '20px' }}>{getModeIcon(seg.mode)}</span>
                                                     <span style={{flexGrow: 1}}>{seg.label || seg.mode} ({((seg?.duration || 0) / 60).toFixed(1)} min, {(seg?.distance / 1000).toFixed(1)} km)</span>
                                                      {seg.fare > 0 && <span style={{marginLeft: '10px', fontWeight: 'bold'}}>(P{seg.fare.toFixed(2)})</span>}
-                                                     {/* Expand/collapse icon */}
                                                      {isTransit && hasStopsToShow && (
                                                          <span className="material-icons" style={{ fontSize: '18px', marginLeft: '5px', color: '#a0aec0' }}>
                                                              {isExpanded ? 'expand_less' : 'expand_more'}
                                                          </span>
                                                      )}
                                                 </div>
-                                                {/* Conditionally render stops list */}
                                                 {isExpanded && hasStopsToShow && (
                                                     <ol style={{ marginLeft: '25px', marginTop: '5px', marginBottom: '10px', fontSize: '0.8rem', color: '#cbd5e1', paddingLeft: '15px', listStyle: 'decimal' }}>
-                                                        {/* Map over fullStopSequence */}
                                                         {seg.fullStopSequence.map((stopName, stopIdx) => (
                                                             <li key={`${idx}-${stopIdx}`} style={{ padding: '2px 0', borderBottom: stopIdx < seg.fullStopSequence.length - 1 ? '1px dotted rgba(255,255,255,0.2)' : 'none' }}>
-                                                                {/* Highlight start/end stops */}
                                                                 {stopIdx === 0 ? <strong>{stopName} (Board)</strong> : stopIdx === seg.fullStopSequence.length - 1 ? <strong>{stopName} (Alight)</strong> : stopName}
                                                             </li>
                                                         ))}

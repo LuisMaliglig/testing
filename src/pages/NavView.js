@@ -326,8 +326,8 @@ const NavView = () => {
         <div style={{ padding: "16px", borderBottom: '1px solid rgba(255, 255, 255, 0.2)', flexShrink: 0 }}>
            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
                 <img src={logo} alt="Logo" style={{ width: "40px", height: "40px", cursor: "pointer" }} onClick={() => navigate("/")}/>
-                <button onClick={() => navigate("/nav-view")} style={{ padding: "8px 14px", backgroundColor: "#1e40af", color: "#fff", border: "none", borderRadius: "6px", cursor: "pointer", fontSize: '0.9rem' }}>
-                  Nav View
+                <button onClick={() => navigate("/map-view")} style={{ padding: "8px 14px", backgroundColor: "#1e40af", color: "#fff", border: "none", borderRadius: "6px", cursor: "pointer", fontSize: '0.9rem' }}>
+                  Map View
                 </button>
            </div>
            <h1 style={{ fontSize: "1.3rem", fontWeight: "600", margin: 0 }}>

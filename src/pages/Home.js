@@ -113,7 +113,7 @@ const Home = () => {
                 fontFamily: "Montserrat, sans-serif" 
               }}
             >
-              Navigator
+              Navigation
             </button>
           </div>
         </div>

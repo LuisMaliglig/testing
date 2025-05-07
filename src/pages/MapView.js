@@ -21,31 +21,24 @@ const modeColors = {
     "LRT1-Stop": "#22c55e",
     "LRT2-Stop": "#7A07D1",
     "Bus-Stop": "#3b82f6",
-    "P2P-Bus-Stop": "#f97316", // Assuming specific P2P stops might exist
-    // Walk/Driving colors not needed for layers here
+    "P2P-Bus-Stop": "#f97316",
 };
 
 // Define initial map center state
-const INITIAL_MAP_CENTER = { lng: 120.995, lat: 14.53848 }; 
+const INITIAL_MAP_CENTER = { lng: 121.05, lat: 14.55 }; // Centered more on Metro Manila
 const INITIAL_MAP_ZOOM = 11;
 // Define proximity threshold for showing stops along a selected line
-const MAX_STOP_DISTANCE_TO_LINE_KM = 0.01; // 50 meters
+const MAX_STOP_DISTANCE_TO_LINE_KM = 0.05; // 50 meters
 
 const MapView = () => {
   const mapContainerRef = useRef(null);
   const mapRef = useRef(null);
   const [nearestRoutes, setNearestRoutes] = useState([]);
   const [selectedRoute, setSelectedRoute] = useState(null);
-  const [markerCenter, setMarkerCenter] = useState(INITIAL_MAP_CENTER); // Use constant for initial state
+  const [markerCenter, setMarkerCenter] = useState(INITIAL_MAP_CENTER);
   const navigate = useNavigate();
-  // Ensure vehicleFilters includes LRT1 and LRT2 if they exist as types
   const [vehicleFilters, setVehicleFilters] = useState({
-    MRT: true,
-    LRT1: true,
-    LRT2: true,
-    Jeep: true,
-    "P2P-Bus": true,
-    Bus: true,
+    MRT: true, LRT1: true, LRT2: true, Jeep: true, "P2P-Bus": true, Bus: true,
   });
 
   // --- Helper Functions ---
@@ -62,58 +55,37 @@ const MapView = () => {
 
   // --- Effects for Fonts ---
   useEffect(() => {
-    // Add Material Icons font link if not present
     const iconsLink = document.getElementById('material-icons-link');
     if (!iconsLink) {
-         const link = document.createElement('link');
-         link.id = 'material-icons-link';
+         const link = document.createElement('link'); link.id = 'material-icons-link';
          link.href = 'https://fonts.googleapis.com/icon?family=Material+Icons';
-         link.rel = 'stylesheet';
-         document.head.appendChild(link);
-         return () => {
-             const addedLink = document.getElementById('material-icons-link');
-             if (addedLink) document.head.removeChild(addedLink);
-         };
+         link.rel = 'stylesheet'; document.head.appendChild(link);
+         return () => { const el = document.getElementById('material-icons-link'); if (el) el.remove(); };
     }
   }, []);
-
   useEffect(() => {
-    // Add Montserrat font link if not present
     const montserratLink = document.getElementById('montserrat-link');
      if (!montserratLink) {
-        const montserrat = document.createElement('link');
-        montserrat.id = 'montserrat-link';
+        const montserrat = document.createElement('link'); montserrat.id = 'montserrat-link';
         montserrat.href = 'https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600&display=swap';
-        montserrat.rel = 'stylesheet';
-        document.head.appendChild(montserrat);
-        return () => {
-            const addedLink = document.getElementById('montserrat-link');
-            if (addedLink) document.head.removeChild(addedLink);
-        };
+        montserrat.rel = 'stylesheet'; document.head.appendChild(montserrat);
+        return () => { const el = document.getElementById('montserrat-link'); if (el) el.remove(); };
      }
   }, []);
 
-  // --- Map Update Helpers ---
-
-  // Calculates the shifted center point based on sidebar offset
+  // --- Memoized Map Update Helpers ---
   const calculateShiftedCenter = useCallback((mapCenter) => {
       if (!mapRef.current) return null;
       try {
         const centerScreenPoint = mapRef.current.project(mapCenter);
         centerScreenPoint.x += 150; // Adjust if sidebar width changes
         return mapRef.current.unproject(centerScreenPoint);
-      } catch (e) {
-        console.error("Error calculating shifted center:", e);
-        return null;
-      }
-  }, []); // Depends only on mapRef implicitly via closure
+      } catch (e) { console.error("Error calculating shifted center:", e); return null; }
+  }, []);
 
-  // Calculates shortest distance from center point to any line segment of the coordinates - MEMOIZED
   const calculatePointToLineDistance = useCallback((coordinates, center) => {
     if (!Array.isArray(coordinates) || coordinates.length < 2 || !center) return Infinity;
-    let minDistanceSq = Infinity;
-    const cx = center.lng;
-    const cy = center.lat;
+    let minDistanceSq = Infinity; const cx = center.lng; const cy = center.lat;
     for (let i = 0; i < coordinates.length - 1; i++) {
         const p1 = coordinates[i]; const p2 = coordinates[i + 1];
          if (!Array.isArray(p1) || p1.length < 2 || typeof p1[0] !== 'number' || typeof p1[1] !== 'number' || !Array.isArray(p2) || p2.length < 2 || typeof p2[0] !== 'number' || typeof p2[1] !== 'number') { continue; }
@@ -126,258 +98,49 @@ const MapView = () => {
         const distSq = (cx - closestX) ** 2 + (cy - closestY) ** 2;
         if (distSq < minDistanceSq) minDistanceSq = distSq;
     }
-    const degreesPerKmLat = 1 / 111.32;
-    const degreesPerKmLon = 1 / (111.32 * Math.cos(center.lat * Math.PI / 180));
+    const degreesPerKmLat = 1 / 111.32; const degreesPerKmLon = 1 / (111.32 * Math.cos(center.lat * Math.PI / 180));
     const avgDegreesPerKm = (degreesPerKmLat + degreesPerKmLon) / 2;
-    // Avoid division by zero if avgDegreesPerKm is somehow 0
     return avgDegreesPerKm > 0 ? Math.sqrt(minDistanceSq) / avgDegreesPerKm : Infinity;
-  }, []); // No dependencies needed
+  }, []);
 
-  // Updates the list of nearest routes based on the center point - MEMOIZED
   const updateNearestRoutes = useCallback((center) => {
-    if (!center || typeof center.lng !== 'number' || typeof center.lat !== 'number') {
-        console.error("Invalid center point provided to updateNearestRoutes:", center);
-        return;
-    }
+    if (!center || typeof center.lng !== 'number' || typeof center.lat !== 'number') { return; }
     // console.log(`Updating nearest routes for center: ${center.lat.toFixed(5)}, ${center.lng.toFixed(5)}`);
-
-    // Filter features based on filters and ensure they are lines
     const filteredFeatures = transitRoute.features.filter(feature => {
-      const type = feature?.properties?.type;
-      const mode = type?.replace('-Stop', '');
-      return type && mode && vehicleFilters[mode] && !type.includes('-Stop') &&
+      const type = feature?.properties?.type; const mode = type?.replace('-Stop', '');
+      return type && mode && vehicleFilters[mode] === true && !type.includes('-Stop') &&
              feature?.geometry?.type === 'LineString' &&
              feature?.geometry?.coordinates && Array.isArray(feature.geometry.coordinates);
     });
-
-    // Calculate distances using point-to-line
     const distances = filteredFeatures.map((feature) => {
       let distance = Infinity;
-      try {
-          // Pass coordinates and center to the memoized distance function
-          distance = calculatePointToLineDistance(feature.geometry.coordinates, center);
-      } catch(e) { console.error(`Error calculating distance for ${feature?.properties?.name}:`, e); distance = Infinity; }
+      try { distance = calculatePointToLineDistance(feature.geometry.coordinates, center); }
+      catch(e) { console.error(`Error calculating distance for ${feature?.properties?.name}:`, e); distance = Infinity; }
       return { ...feature, distance: (typeof distance === 'number' && !isNaN(distance)) ? distance : Infinity };
     });
-
     const validDistances = distances.filter(route => route.distance !== Infinity);
     const sortedRoutes = validDistances.sort((a, b) => a.distance - b.distance);
-    setNearestRoutes(sortedRoutes.slice(0, 7)); // Update state
-    // console.log(`Found ${sortedRoutes.slice(0, 7).length} nearest routes.`);
-  }, [vehicleFilters, calculatePointToLineDistance]); // Dependencies: filters and the distance function
+    setNearestRoutes(sortedRoutes.slice(0, 7));
+    // console.log(`Found ${sortedRoutes.slice(0, 7).length} nearest routes after sorting.`);
+  }, [vehicleFilters, calculatePointToLineDistance]);
 
-  // Handles map move end event - MEMOIZED
   const handleMapMoveEnd = useCallback(() => {
       if (!mapRef.current) return;
-      // console.log("Map move ended.");
       const mapCenter = mapRef.current.getCenter();
       const shiftedCenter = calculateShiftedCenter(mapCenter);
       if (shiftedCenter) {
           setMarkerCenter({ lng: shiftedCenter.lng, lat: shiftedCenter.lat });
-          updateNearestRoutes(shiftedCenter); // Call the memoized update function
+          updateNearestRoutes(shiftedCenter);
       }
-  }, [calculateShiftedCenter, updateNearestRoutes]); // Dependencies for handleMapMoveEnd
+  }, [calculateShiftedCenter, updateNearestRoutes]);
 
-
-  // --- Map Initialization ---
-  useEffect(() => {
-    if (!mapContainerRef.current) return;
-
-    let isMounted = true;
-    const map = new maplibregl.Map({
-      container: mapContainerRef.current,
-      style: `https://maps.geo.${awsConfig.region}.amazonaws.com/maps/v0/maps/${awsConfig.mapName}/style-descriptor?key=${awsConfig.apiKey}`,
-      center: [markerCenter.lng, markerCenter.lat],
-      zoom: INITIAL_MAP_ZOOM, // Use constant
-    });
-    mapRef.current = map;
-
-    map.on("load", () => {
-        if (!mapRef.current || !isMounted) return;
-        console.log("Map loaded event fired.");
-        // Add source
-        if (!mapRef.current.getSource("transit-route")) {
-            mapRef.current.addSource("transit-route", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
-        }
-        // Add layers
-        addAllLayers(map);
-        // Initial data load based on default filters
-        updateMapDataSource();
-        // Initial nearest routes calculation
-        const initialCenter = map.getCenter();
-        const initialShiftedCenter = calculateShiftedCenter(initialCenter);
-        if (initialShiftedCenter) {
-            if (isMounted) {
-                setMarkerCenter({ lng: initialShiftedCenter.lng, lat: initialShiftedCenter.lat });
-                updateNearestRoutes(initialShiftedCenter);
-            }
-        }
-        // Attach the move end listener *after* initial setup
-        map.on("moveend", handleMapMoveEnd);
-        console.log("Map 'moveend' listener attached.");
-    });
-
-     map.on('error', (e) => console.error("MapLibre Error:", e));
-
-    // Cleanup function
-    return () => {
-      isMounted = false;
-      if (mapRef.current) {
-        if (mapRef.current.isStyleLoaded()) { // Check if style is loaded before removing listener
-             try { mapRef.current.off("moveend", handleMapMoveEnd); } catch (e) {/* ignore */}
-        }
-        mapRef.current.remove();
-        mapRef.current = null;
-      }
-    };
-  // Only run ONCE on mount. Filter/selection changes handled separately.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Removed handleMapMoveEnd dependency - it's stable due to useCallback
-
-  // --- Effect to Update Map Data/Visibility When Filters/Selection Change ---
-  useEffect(() => {
-    if (!mapRef.current || !mapRef.current.isStyleLoaded()) {
-        // console.log("Map not ready for data/visibility update.");
-        return;
-    }
-    updateMapDataSource();
-    updateLayerVisibility();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedRoute, vehicleFilters]); // Rerun when selection or filters change
-
-
-  // --- Map Update Helpers ---
-  // Updates the GeoJSON data in the map source
-  const updateMapDataSource = () => {
-    if (!mapRef.current || !mapRef.current.getSource("transit-route")) return;
-
-    let featuresToShow = [];
-    if (selectedRoute) {
-       // If a route is selected, show that route AND its corresponding stops
-       if (selectedRoute.type === 'Feature' && selectedRoute.geometry?.type === 'LineString') {
-           featuresToShow.push(selectedRoute); // Add the selected line
-
-           // Find and add stops matching the selected route's mode AND are close to the line
-           const selectedMode = selectedRoute.properties?.type; // e.g., "MRT", "Bus", "LRT1"
-           if (selectedMode && !selectedMode.includes('-Stop')) {
-               let stopTypesToFind = [`${selectedMode}-Stop`]; // e.g., "MRT-Stop"
-               // Special case for Bus/P2P: Also include generic Bus-Stops
-               if (selectedMode === 'Bus' || selectedMode === 'P2P-Bus') {
-                   if (!stopTypesToFind.includes('Bus-Stop')) stopTypesToFind.push('Bus-Stop');
-                   if (!stopTypesToFind.includes('P2P-Bus-Stop')) stopTypesToFind.push('P2P-Bus-Stop'); // If you have specific P2P stops
-               }
-
-               const relatedStops = transitRoute.features.filter(feature => {
-                   // Check if it's a stop of the correct type
-                   const isCorrectStopType = feature?.geometry?.type === 'Point' &&
-                                             feature?.properties?.type &&
-                                             stopTypesToFind.includes(feature.properties.type);
-                   if (!isCorrectStopType) return false;
-
-                   // Check proximity to the selected line
-                   try {
-                       // Ensure stop has valid coordinates
-                       if (!Array.isArray(feature.geometry.coordinates) || feature.geometry.coordinates.length < 2) return false;
-                       const stopPoint = turf.point(feature.geometry.coordinates);
-                       const distanceToLine = turf.pointToLineDistance(stopPoint, selectedRoute.geometry, { units: 'kilometers' });
-                       return distanceToLine <= MAX_STOP_DISTANCE_TO_LINE_KM;
-                   } catch (e) {
-                       console.error(`Error checking distance for stop ${feature?.properties?.name}:`, e);
-                       return false; // Exclude if error occurs
-                   }
-               });
-
-               featuresToShow.push(...relatedStops);
-               // console.log(`Showing ${relatedStops.length} stops near selected line: ${selectedMode}`);
-           }
-       } else { console.warn("Selected route is not a valid GeoJSON LineString Feature:", selectedRoute); }
-    } else {
-      // Otherwise, show all features matching the current filters
-      featuresToShow = transitRoute.features.filter(feature => {
-        const type = feature?.properties?.type;
-        const mode = type?.replace('-Stop', '');
-        return type && mode && vehicleFilters[mode] && feature?.geometry;
-      });
-    }
-
-    const newGeoJSON = { type: "FeatureCollection", features: featuresToShow };
-    try {
-        mapRef.current.getSource("transit-route")?.setData(newGeoJSON);
-        // console.log(`Map source 'transit-route' updated with ${featuresToShow.length} features.`);
-    } catch(e) { console.error("Error setting map source data:", e); }
-  };
-
-  const updateLayerVisibility = () => {
-      if (!mapRef.current) return;
-      const stopLayers = ["mrt-stops", "lrt1-stops", "lrt2-stops", "bus-stops", "p2p-bus-stops"];
-      const lineLayers = ["mrt-line", "lrt1-line", "lrt2-line", "bus-lines", "p2p-bus-lines", "jeep-lines"];
-
-      const safeSetLayoutProperty = (layerId, prop, value) => {
-          if (mapRef.current?.getLayer(layerId)) {
-              try { mapRef.current.setLayoutProperty(layerId, prop, value); }
-              catch (e) { /* console.warn(`Could not set layout property '${prop}' for layer '${layerId}':`, e.message); */ }
-          }
-      };
-
-      if (selectedRoute) {
-          const selectedMode = selectedRoute.properties?.type;
-          const isBusOrP2P = selectedMode === 'Bus' || selectedMode === 'P2P-Bus';
-
-          // Hide ALL lines first, then show the selected one
-          lineLayers.forEach(layerId => safeSetLayoutProperty(layerId, "visibility", "none"));
-          const selectedLineLayerId = lineLayers.find(id => id.startsWith(selectedMode?.toLowerCase()));
-          if (selectedLineLayerId) { safeSetLayoutProperty(selectedLineLayerId, "visibility", "visible"); }
-
-          // Show only stops relevant to the selected line's mode (data source filtering handles which stops are available)
-          // We just need to make sure the correct *layer* is visible
-          stopLayers.forEach(layerId => {
-              let showLayer = false;
-              // Determine the stop type this layer represents (e.g., 'MRT-Stop')
-              // Corrected logic to handle layer IDs like 'lrt1-stops'
-              let layerMode = layerId.split('-')[0]; // mrt, lrt1, lrt2, bus, p2p
-              if (layerMode === 'LRT') layerMode += layerId.split('-')[0].substring(3); // Append 1 or 2
-              if (layerMode === 'P2P') layerMode = 'P2P-Bus'; // Normalize P2P
-              layerMode = layerMode.toUpperCase();
-
-              const layerStopType = `${layerMode}-Stop`; // MRT-Stop, LRT1-Stop, BUS-Stop etc.
-
-              // Show if it matches the selected mode's stop type
-              if (isBusOrP2P && (layerId === 'bus-stops' || layerId === 'p2p-bus-stops')) {
-                  showLayer = true;
-              } else if (layerId.startsWith(selectedMode?.toLowerCase())) { // Match MRT-stops, LRT1-stops etc.
-                  showLayer = true;
-              }
-              safeSetLayoutProperty(layerId, "visibility", showLayer ? "visible" : "none");
-          });
-
-      } else {
-          // Set visibility based on filters when nothing is selected
-          safeSetLayoutProperty("mrt-stops", "visibility", vehicleFilters.MRT ? "visible" : "none");
-          safeSetLayoutProperty("lrt1-stops", "visibility", vehicleFilters.LRT1 ? "visible" : "none");
-          safeSetLayoutProperty("lrt2-stops", "visibility", vehicleFilters.LRT2 ? "visible" : "none");
-          safeSetLayoutProperty("bus-stops", "visibility", (vehicleFilters.Bus || vehicleFilters['P2P-Bus']) ? "visible" : "none");
-          safeSetLayoutProperty("p2p-bus-stops", "visibility", vehicleFilters['P2P-Bus'] ? "visible" : "none");
-
-          safeSetLayoutProperty("mrt-line", "visibility", vehicleFilters.MRT ? "visible" : "none");
-          safeSetLayoutProperty("lrt1-line", "visibility", vehicleFilters.LRT1 ? "visible" : "none");
-          safeSetLayoutProperty("lrt2-line", "visibility", vehicleFilters.LRT2 ? "visible" : "none");
-          safeSetLayoutProperty("bus-lines", "visibility", vehicleFilters.Bus ? "visible" : "none");
-          safeSetLayoutProperty("p2p-bus-lines", "visibility", vehicleFilters['P2P-Bus'] ? "visible" : "none");
-          safeSetLayoutProperty("jeep-lines", "visibility", vehicleFilters.Jeep ? "visible" : "none");
-      }
-  };
-
-
-  // Adds all necessary layers to the map (call on load)
-  const addAllLayers = (map) => {
-        // Function to safely add layer
+  const addAllLayers = useCallback((map) => {
         const safeAddLayer = (layerConfig) => {
             if (!map.getLayer(layerConfig.id)) {
                 try { map.addLayer(layerConfig); }
                 catch (e) { console.error(`Failed to add layer '${layerConfig.id}':`, e); }
             }
         };
-        // Define layer configurations including LRT1/LRT2 stops and P2P stops
         const layers = [
             { id: "mrt-line", type: "line", filter: ["==", ["get", "type"], "MRT"], paint: { "line-color": modeColors.MRT, "line-width": 4 } },
             { id: "lrt1-line", type: "line", filter: ["==", ["get", "type"], "LRT1"], paint: { "line-color": modeColors.LRT1, "line-width": 4 } },
@@ -391,16 +154,156 @@ const MapView = () => {
             { id: "bus-stops", type: "circle", filter: ["==", ["get", "type"], "Bus-Stop"], paint: { "circle-radius": 5, "circle-color": modeColors.Bus, "circle-stroke-color": "#fff", "circle-stroke-width": 1 } },
             { id: "p2p-bus-stops", type: "circle", source: "transit-route", filter: ["==", ["get", "type"], "P2P-Bus-Stop"], paint: { "circle-radius": 5, "circle-color": modeColors['P2P-Bus'], "circle-stroke-color": "#fff", "circle-stroke-width": 1 } },
         ];
-
-        // Add each layer
         layers.forEach(layer => {
             const layoutProps = layer.type === 'line' ? { "line-join": "round", "line-cap": "round" } : {};
             safeAddLayer({ ...layer, source: "transit-route", layout: layoutProps });
         });
         console.log("Transit layers added/verified.");
-  };
+  }, []); // modeColors is constant
 
-  // --- Distance Calculation ---
+  const updateMapDataSource = useCallback(() => {
+    if (!mapRef.current || !mapRef.current.getSource("transit-route")) return;
+    let featuresToShow = [];
+    if (selectedRoute) {
+       if (selectedRoute.type === 'Feature' && selectedRoute.geometry?.type === 'LineString') {
+           featuresToShow.push(selectedRoute);
+           const selectedMode = selectedRoute.properties?.type;
+           if (selectedMode && !selectedMode.includes('-Stop')) {
+               let stopTypesToFind = [`${selectedMode}-Stop`];
+               if (selectedMode === 'Bus' || selectedMode === 'P2P-Bus') {
+                   if (!stopTypesToFind.includes('Bus-Stop')) stopTypesToFind.push('Bus-Stop');
+                   if (!stopTypesToFind.includes('P2P-Bus-Stop')) stopTypesToFind.push('P2P-Bus-Stop');
+               }
+               const relatedStops = transitRoute.features.filter(feature => {
+                   const isCorrectStopType = feature?.geometry?.type === 'Point' && feature?.properties?.type && stopTypesToFind.includes(feature.properties.type);
+                   if (!isCorrectStopType) return false;
+                   try {
+                       if (!Array.isArray(feature.geometry.coordinates) || feature.geometry.coordinates.length < 2) return false;
+                       const stopPoint = turf.point(feature.geometry.coordinates);
+                       const distanceToLine = calculatePointToLineDistance(selectedRoute.geometry.coordinates, {lng: stopPoint.geometry.coordinates[0], lat: stopPoint.geometry.coordinates[1]});
+                       return distanceToLine <= MAX_STOP_DISTANCE_TO_LINE_KM;
+                   } catch (e) { console.error(`Error checking distance for stop ${feature?.properties?.name}:`, e); return false; }
+               });
+               featuresToShow.push(...relatedStops);
+           }
+       } else { console.warn("Selected route is not a valid GeoJSON LineString Feature:", selectedRoute); }
+    } else {
+      featuresToShow = transitRoute.features.filter(feature => {
+        const type = feature?.properties?.type; const mode = type?.replace('-Stop', '');
+        return type && mode && vehicleFilters[mode] && feature?.geometry;
+      });
+    }
+    const newGeoJSON = { type: "FeatureCollection", features: featuresToShow };
+    try { mapRef.current.getSource("transit-route")?.setData(newGeoJSON); }
+    catch(e) { console.error("Error setting map source data:", e); }
+  }, [selectedRoute, vehicleFilters, calculatePointToLineDistance]);
+
+  const updateLayerVisibility = useCallback(() => {
+      if (!mapRef.current) return;
+      const stopLayers = ["mrt-stops", "lrt1-stops", "lrt2-stops", "bus-stops", "p2p-bus-stops"];
+      const lineLayers = ["mrt-line", "lrt1-line", "lrt2-line", "bus-lines", "p2p-bus-lines", "jeep-lines"];
+      const safeSetLayoutProperty = (layerId, prop, value) => {
+          if (mapRef.current?.getLayer(layerId)) {
+              try { mapRef.current.setLayoutProperty(layerId, prop, value); } catch (e) { /* ignore */ }
+          }
+      };
+      if (selectedRoute) {
+          const selectedMode = selectedRoute.properties?.type;
+          const isBusOrP2P = selectedMode === 'Bus' || selectedMode === 'P2P-Bus';
+          lineLayers.forEach(layerId => safeSetLayoutProperty(layerId, "visibility", "none"));
+          const selectedLineLayerId = lineLayers.find(id => id.startsWith(selectedMode?.toLowerCase()));
+          if (selectedLineLayerId) { safeSetLayoutProperty(selectedLineLayerId, "visibility", "visible"); }
+          stopLayers.forEach(layerId => {
+              let showLayer = false;
+              let layerMode = layerId.split('-')[0];
+              if (layerMode === 'LRT') layerMode += layerId.split('-')[0].substring(3);
+              if (layerMode === 'P2P') layerMode = 'P2P-Bus';
+              layerMode = layerMode.toUpperCase();
+              if (isBusOrP2P && (layerId === 'bus-stops' || layerId === 'p2p-bus-stops')) { showLayer = true; }
+              else if (layerId.startsWith(selectedMode?.toLowerCase())) { showLayer = true; }
+              safeSetLayoutProperty(layerId, "visibility", showLayer ? "visible" : "none");
+          });
+      } else {
+          safeSetLayoutProperty("mrt-stops", "visibility", vehicleFilters.MRT ? "visible" : "none");
+          safeSetLayoutProperty("lrt1-stops", "visibility", vehicleFilters.LRT1 ? "visible" : "none");
+          safeSetLayoutProperty("lrt2-stops", "visibility", vehicleFilters.LRT2 ? "visible" : "none");
+          safeSetLayoutProperty("bus-stops", "visibility", (vehicleFilters.Bus || vehicleFilters['P2P-Bus']) ? "visible" : "none");
+          safeSetLayoutProperty("p2p-bus-stops", "visibility", vehicleFilters['P2P-Bus'] ? "visible" : "none");
+          safeSetLayoutProperty("mrt-line", "visibility", vehicleFilters.MRT ? "visible" : "none");
+          safeSetLayoutProperty("lrt1-line", "visibility", vehicleFilters.LRT1 ? "visible" : "none");
+          safeSetLayoutProperty("lrt2-line", "visibility", vehicleFilters.LRT2 ? "visible" : "none");
+          safeSetLayoutProperty("bus-lines", "visibility", vehicleFilters.Bus ? "visible" : "none");
+          safeSetLayoutProperty("p2p-bus-lines", "visibility", vehicleFilters['P2P-Bus'] ? "visible" : "none");
+          safeSetLayoutProperty("jeep-lines", "visibility", vehicleFilters.Jeep ? "visible" : "none");
+      }
+  }, [selectedRoute, vehicleFilters]);
+
+
+  // --- Map Initialization ---
+  useEffect(() => {
+    if (!mapContainerRef.current) return;
+    let isMounted = true;
+    const map = new maplibregl.Map({
+      container: mapContainerRef.current,
+      style: `https://maps.geo.${awsConfig.region}.amazonaws.com/maps/v0/maps/${awsConfig.mapName}/style-descriptor?key=${awsConfig.apiKey}`,
+      center: [INITIAL_MAP_CENTER.lng, INITIAL_MAP_CENTER.lat],
+      zoom: INITIAL_MAP_ZOOM,
+    });
+    mapRef.current = map;
+
+    map.on("load", () => {
+        if (!mapRef.current || !isMounted) return;
+        console.log("Map loaded event fired.");
+        if (!mapRef.current.getSource("transit-route")) {
+            mapRef.current.addSource("transit-route", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
+        }
+        addAllLayers(map);
+        updateMapDataSource();
+        const initialCenter = map.getCenter();
+        const initialShiftedCenter = calculateShiftedCenter(initialCenter);
+        if (initialShiftedCenter && isMounted) {
+            setMarkerCenter({ lng: initialShiftedCenter.lng, lat: initialShiftedCenter.lat });
+            updateNearestRoutes(initialShiftedCenter);
+        }
+        // Event listener is managed by a separate effect now
+    });
+     map.on('error', (e) => console.error("MapLibre Error:", e));
+    return () => {
+      isMounted = false;
+      if (mapRef.current) { mapRef.current.remove(); mapRef.current = null; }
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Runs once
+
+  // Effect to manage map event listeners
+  useEffect(() => {
+      if (mapRef.current && mapRef.current.isStyleLoaded()) {
+          const currentMap = mapRef.current;
+          currentMap.on('moveend', handleMapMoveEnd);
+          console.log("Map 'moveend' listener attached/updated.");
+          return () => {
+              if (currentMap.isStyleLoaded()) { // Check again before removing
+                  try { currentMap.off('moveend', handleMapMoveEnd); } catch (e) {/*ignore*/}
+                  // console.log("Map 'moveend' listener detached.");
+              }
+          };
+      }
+  }, [handleMapMoveEnd]); // Re-attach if handleMapMoveEnd changes
+
+  // --- Effect to Update Map Data/Visibility AND Nearest Routes When Filters/Selection Change ---
+  useEffect(() => {
+    if (!mapRef.current || !mapRef.current.isStyleLoaded()) return;
+    // console.log("Updating map data source, layer visibility, and nearest routes due to selection/filter change.");
+    updateMapDataSource();
+    updateLayerVisibility();
+    if (!selectedRoute) {
+        // console.log("Filters changed, recalculating nearest routes with current markerCenter.");
+        updateNearestRoutes(markerCenter);
+    }
+  }, [selectedRoute, vehicleFilters, markerCenter, updateMapDataSource, updateLayerVisibility, updateNearestRoutes]);
+
+
+  // --- Distance Calculation (only one needed now) ---
   const calculateDistance = (point1, point2) => {
     if (!point1 || typeof point1.lat !== 'number' || typeof point1.lng !== 'number' ||
         !point2 || typeof point2.lat !== 'number' || typeof point2.lng !== 'number') {
@@ -413,13 +316,9 @@ const MapView = () => {
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     return R * c;
   };
-  // const calculateNearestVertexDistance = (coordinates, center) => { /* ... removed ... */ };
-  // const calculatePointToLineDistance = useCallback((coordinates, center) => { /* ... as before ... */ }, []); // Already defined above
 
 
   // --- Event Handlers ---
-
-  // Handles clicking on a route in the sidebar
   const handleRouteSelection = (route) => {
     if (!mapRef.current || !route?.geometry) return;
 
@@ -459,6 +358,10 @@ const MapView = () => {
             zoom: INITIAL_MAP_ZOOM,
             duration: 1000
         });
+        // Also reset markerCenter to initial so nearest routes update from the default view
+        setMarkerCenter(INITIAL_MAP_CENTER);
+        // Explicitly update nearest routes based on this reset view
+        updateNearestRoutes(INITIAL_MAP_CENTER);
     }
   };
 
