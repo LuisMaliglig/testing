@@ -319,14 +319,14 @@ const NavView = () => {
       <div style={{
           position: "absolute", top: "20px", left: "20px", width: "340px",
           maxHeight: "calc(100vh - 40px)", backgroundColor: "rgba(0, 0, 0, 0.75)",
-          backdropFilter: "blur(5px)", color: "white", zIndex: 10, borderRadius: "8px",
+          backdropFilter: "blur(5px)", color: "white", zIndex: 10, borderRadius: "5px",
           boxShadow: "0 4px 15px rgba(0, 0, 0, 0.3)", display: "flex", flexDirection: "column",
       }}>
         {/* Panel Header */}
         <div style={{ padding: "16px", borderBottom: '1px solid rgba(255, 255, 255, 0.2)', flexShrink: 0 }}>
            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
                 <img src={logo} alt="Logo" style={{ width: "40px", height: "40px", cursor: "pointer" }} onClick={() => navigate("/")}/>
-                <button onClick={() => navigate("/map-view")} style={{ padding: "8px 14px", backgroundColor: "#1e40af", color: "#fff", border: "none", borderRadius: "6px", cursor: "pointer", fontSize: '0.9rem' }}>
+                <button onClick={() => navigate("/map-view")} style={{ padding: "8px 14px", backgroundColor: "#1e40af", color: "#fff", border: "none", borderRadius: "5px", cursor: "pointer", fontSize: '0.9rem' }}>
                   Map View
                 </button>
            </div>
@@ -344,7 +344,7 @@ const NavView = () => {
             </div>
 
             {/* Display Selected Coords */}
-            <div style={{ fontSize: '0.8rem', marginBottom: '15px', color: '#d1d5db', padding: '8px', backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: '4px' }}>
+            <div style={{ fontSize: '0.8rem', marginBottom: '15px', color: '#d1d5db', padding: '8px', backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: '5px' }}>
                 <div><strong>Origin:</strong> {originCoords ? `${originCoords.lat.toFixed(5)}, ${originCoords.lng.toFixed(5)}` : 'Not selected'}</div>
                 <div><strong>Destination:</strong> {destinationCoords ? `${destinationCoords.lat.toFixed(5)}, ${destinationCoords.lng.toFixed(5)}` : 'Not selected'}</div>
             </div>
@@ -373,8 +373,7 @@ const NavView = () => {
               {isLoading ? "Calculating..." : "Suggest Routes"}
             </button>
 
-            {/* --- Hardcoded Route Button --- */}
-            <button
+            {/* <button
               onClick={handleHardcodedRoute}
               disabled={isLoading} // Disable only when loading
               style={{
@@ -389,11 +388,27 @@ const NavView = () => {
               }}
             >
               {isLoading ? "Calculating..." : "Test: Alabang ➔ Buendia Multi-Modal"}
-            </button>
-            {/* --- END Hardcoded Route Button --- */}
+            </button> */}
 
         </div> {/* End Panel Content */}
+        
       </div> {/* End Overlay UI Panel */}
+      <div style={{
+            position: "absolute", top: "-5px", right: "50px", backgroundColor: "rgba(0, 0, 0, 0.8)",
+            color: "white", padding: "10px 12px", borderRadius: "5px", zIndex: 10, boxShadow: "0 2px 4px rgba(0, 0, 0, 0.4)", fontSize: '0.8rem'
+        }}>
+            <h4 style={{ marginBottom: "8px", fontWeight: "bold", textAlign: "center", marginTop: 0, fontSize: '0.9rem' }}>Legend</h4>
+            <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                {Object.entries(modeColors)
+                    .filter(([mode]) => mode !== 'Walk' && mode !== 'Driving' && !mode.includes('-Stop'))
+                    .map(([mode, color]) => (
+                        <div key={mode} style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                            <div style={{ width: "14px", height: "14px", borderRadius: "50%", backgroundColor: color, flexShrink: 0 }} />
+                            <span>{mode}</span>
+                        </div>
+                    ))}
+            </div>
+        </div>
     </div> // End Root Div
   );
 };

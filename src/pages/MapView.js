@@ -27,7 +27,7 @@ const modeColors = {
 const INITIAL_MAP_CENTER = { lng: 121.05, lat: 14.55 }; // Centered more on Metro Manila
 const INITIAL_MAP_ZOOM = 11;
 // Define proximity threshold for showing stops along a selected line
-const MAX_STOP_DISTANCE_TO_LINE_KM = 0.05; // 50 meters
+const MAX_STOP_DISTANCE_TO_LINE_KM = 0.005; 
 
 const MapView = () => {
   const mapContainerRef = useRef(null);
@@ -133,7 +133,6 @@ const MapView = () => {
       }
   }, [calculateShiftedCenter, updateNearestRoutes]);
 
-  // --- Function to Add Transit Layers (Corrected Layout Application) ---
   const addAllLayers = useCallback((map) => {
         const safeAddLayer = (layerConfig) => {
             if (!map.getLayer(layerConfig.id)) {
@@ -141,7 +140,6 @@ const MapView = () => {
                 catch (e) { console.error(`Failed to add layer '${layerConfig.id}':`, e); }
             }
         };
-        // Define layer configurations including LRT1/LRT2 stops and P2P stops
         const layers = [
             { id: "mrt-line", type: "line", filter: ["==", ["get", "type"], "MRT"], paint: { "line-color": modeColors.MRT, "line-width": 4 } },
             { id: "lrt1-line", type: "line", filter: ["==", ["get", "type"], "LRT1"], paint: { "line-color": modeColors.LRT1, "line-width": 4 } },
@@ -149,23 +147,15 @@ const MapView = () => {
             { id: "jeep-lines", type: "line", filter: ["==", ["get", "type"], "Jeep"], paint: { "line-color": modeColors.Jeep, "line-width": 3, 'line-opacity': 0.7 } },
             { id: "p2p-bus-lines", type: "line", filter: ["==", ["get", "type"], "P2P-Bus"], paint: { "line-color": modeColors['P2P-Bus'], "line-width": 3 } },
             { id: "bus-lines", type: "line", filter: ["==", ["get", "type"], "Bus"], paint: { "line-color": modeColors.Bus, "line-width": 3 } },
-            { id: "mrt-stops", type: "circle", filter: ["==", ["get", "type"], "MRT-Stop"], paint: { "circle-radius": 5, "circle-color": modeColors.MRT, "circle-stroke-color": "#fff", "circle-stroke-width": 1 } },
-            { id: "lrt1-stops", type: "circle", filter: ["==", ["get", "type"], "LRT1-Stop"], paint: { "circle-radius": 5, "circle-color": modeColors.LRT1, "circle-stroke-color": "#fff", "circle-stroke-width": 1 } },
-            { id: "lrt2-stops", type: "circle", filter: ["==", ["get", "type"], "LRT2-Stop"], paint: { "circle-radius": 5, "circle-color": modeColors.LRT2, "circle-stroke-color": "#fff", "circle-stroke-width": 1 } },
-            { id: "bus-stops", type: "circle", filter: ["==", ["get", "type"], "Bus-Stop"], paint: { "circle-radius": 5, "circle-color": modeColors.Bus, "circle-stroke-color": "#fff", "circle-stroke-width": 1 } },
-            { id: "p2p-bus-stops", type: "circle", source: "transit-route", filter: ["==", ["get", "type"], "P2P-Bus-Stop"], paint: { "circle-radius": 5, "circle-color": modeColors['P2P-Bus'], "circle-stroke-color": "#fff", "circle-stroke-width": 1 } },
+            { id: "mrt-stops", type: "circle", filter: ["==", ["get", "type"], "MRT-Stop"], paint: { "circle-radius": 5, "circle-color": modeColors["MRT-Stop"], "circle-stroke-color": "#fff", "circle-stroke-width": 1 } },
+            { id: "lrt1-stops", type: "circle", filter: ["==", ["get", "type"], "LRT1-Stop"], paint: { "circle-radius": 5, "circle-color": modeColors["LRT1-Stop"], "circle-stroke-color": "#fff", "circle-stroke-width": 1 } },
+            { id: "lrt2-stops", type: "circle", filter: ["==", ["get", "type"], "LRT2-Stop"], paint: { "circle-radius": 5, "circle-color": modeColors["LRT2-Stop"], "circle-stroke-color": "#fff", "circle-stroke-width": 1 } },
+            { id: "bus-stops", type: "circle", filter: ["==", ["get", "type"], "Bus-Stop"], paint: { "circle-radius": 5, "circle-color": modeColors["Bus-Stop"], "circle-stroke-color": "#fff", "circle-stroke-width": 1 } },
+            { id: "p2p-bus-stops", type: "circle", filter: ["==", ["get", "type"], "P2P-Bus-Stop"], paint: { "circle-radius": 5, "circle-color": modeColors['P2P-Bus-Stop'], "circle-stroke-color": "#fff", "circle-stroke-width": 1 } },
         ];
-
-        // Add each layer
         layers.forEach(layer => {
-            // *** FIX: Only apply line layout properties to line layers ***
             const layoutProps = layer.type === 'line' ? { "line-join": "round", "line-cap": "round" } : {};
-            safeAddLayer({
-                ...layer,
-                source: "transit-route",
-                // Conditionally add layout based on type
-                ...(layer.type === 'line' && { layout: layoutProps })
-            });
+            safeAddLayer({ ...layer, source: "transit-route", layout: layoutProps });
         });
         console.log("Transit layers added/verified.");
   }, []); // modeColors is constant
@@ -225,14 +215,19 @@ const MapView = () => {
           stopLayers.forEach(layerId => {
               let showLayer = false;
               let layerMode = layerId.split('-')[0];
-              if (layerMode === 'LRT') layerMode += layerId.split('-')[0].substring(3);
-              if (layerMode === 'P2P') layerMode = 'P2P-Bus';
+              if (layerMode === 'lrt') layerMode += layerId.split('-')[1]; // Handle lrt1, lrt2
+              if (layerMode === 'p2p') layerMode = 'P2P-Bus';
               layerMode = layerMode.toUpperCase();
+              // const layerStopType = `${layerMode}-Stop`; // This logic wasn't quite right
+
+              // Show stops if their layer type matches the selected mode's stop type
               if (isBusOrP2P && (layerId === 'bus-stops' || layerId === 'p2p-bus-stops')) { showLayer = true; }
               else if (layerId.startsWith(selectedMode?.toLowerCase())) { showLayer = true; }
+
               safeSetLayoutProperty(layerId, "visibility", showLayer ? "visible" : "none");
           });
       } else {
+          // Set visibility based on filters when nothing is selected
           safeSetLayoutProperty("mrt-stops", "visibility", vehicleFilters.MRT ? "visible" : "none");
           safeSetLayoutProperty("lrt1-stops", "visibility", vehicleFilters.LRT1 ? "visible" : "none");
           safeSetLayoutProperty("lrt2-stops", "visibility", vehicleFilters.LRT2 ? "visible" : "none");
@@ -266,7 +261,7 @@ const MapView = () => {
         if (!mapRef.current.getSource("transit-route")) {
             mapRef.current.addSource("transit-route", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
         }
-        addAllLayers(map);
+        addAllLayers(map); // Add layers using the memoized function
         updateMapDataSource(); // Initial data load
         const initialCenter = map.getCenter();
         const initialShiftedCenter = calculateShiftedCenter(initialCenter);
@@ -288,10 +283,13 @@ const MapView = () => {
   useEffect(() => {
       if (mapRef.current && mapRef.current.isStyleLoaded()) {
           const currentMap = mapRef.current;
-          currentMap.on('moveend', handleMapMoveEnd); // Use the memoized handler
+          // Use the memoized handler
+          currentMap.on('moveend', handleMapMoveEnd);
           // console.log("Map 'moveend' listener attached/updated.");
+          // Cleanup function
           return () => {
-              if (currentMap.isStyleLoaded()) { // Check again before removing
+              // Check if map still exists and style loaded before removing listener
+              if (currentMap.isStyleLoaded()) {
                   try { currentMap.off('moveend', handleMapMoveEnd); } catch (e) {/*ignore*/}
                   // console.log("Map 'moveend' listener detached.");
               }
@@ -334,9 +332,11 @@ const MapView = () => {
 
     if (selectedRoute === route) {
       setSelectedRoute(null);
+      // Reset map view when deselecting
       mapRef.current.flyTo({ center: [markerCenter.lng, markerCenter.lat], zoom: INITIAL_MAP_ZOOM });
     } else {
       setSelectedRoute(route);
+      // Zoom to selected route
       try {
           if (route.geometry.type !== 'LineString' || !Array.isArray(route.geometry.coordinates) || route.geometry.coordinates.length < 2) { throw new Error("Invalid LineString"); }
           const bounds = turf.bbox(route.geometry);
@@ -382,6 +382,7 @@ const MapView = () => {
       [type]: !prevFilters[type],
     }));
     setSelectedRoute(null); // Deselect route on filter change
+    // Nearest routes will update via the useEffect hook watching vehicleFilters
   };
 
   // Gets color based on route type
@@ -402,7 +403,7 @@ const MapView = () => {
           <div style={{padding: "16px", flexShrink: 0}}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
                   <img src={logo} alt="Logo" style={{ width: "40px", height: "40px", cursor: "pointer" }} onClick={() => navigate("/")}/>
-                  <button onClick={() => navigate("/nav-view")} style={{ padding: "8px 14px", backgroundColor: "#1e40af", color: "#fff", border: "none", borderRadius: "6px", cursor: "pointer", fontSize: '0.9rem' }}>
+                  <button onClick={() => navigate("/nav-view")} style={{ padding: "8px 14px", backgroundColor: "#1e40af", color: "#fff", border: "none", borderRadius: "5px", cursor: "pointer", fontSize: '0.9rem' }}>
                       Nav View
                   </button>
               </div>
@@ -436,14 +437,14 @@ const MapView = () => {
                                    cursor: "pointer", marginBottom: "8px",
                                    backgroundColor: getRouteColor(routeType),
                                    color: "#111",
-                                   padding: "10px 14px", borderRadius: "8px", fontWeight: "600",
+                                   padding: "10px 14px", borderRadius: "5px", fontWeight: "600",
                                    border: selectedRoute === route ? "3px solid #fff" : "3px solid transparent",
                                    transition: 'background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease',
                                    boxShadow: selectedRoute === route ? '0 0 8px rgba(255, 255, 255, 0.7)' : 'none'
                                }}
                            >
-                               <div style={{ fontSize: "0.95rem", marginBottom: '3px' }}>{routeName}</div>
-                               <div style={{ fontSize: "0.8rem", fontWeight: "400", display: "flex", alignItems: "center", gap: "10px", marginTop: "4px", color: '#333' }}>
+                               <div style={{ fontSize: "1rem", marginBottom: '3px' }}>{routeName}</div>
+                               <div style={{ fontSize: "1rem", fontWeight: "600", display: "flex", alignItems: "center", gap: "10px", marginTop: "4px", color: '#333' }}>
                                    <span>{formatDistance(route.distance)}</span>
                                    <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
                                        <span className="material-icons" style={{ fontSize: "16px" }}>directions_walk</span>
@@ -461,7 +462,7 @@ const MapView = () => {
               <button onClick={handleResetSelection} disabled={!selectedRoute} style={{
                   padding: "10px 16px", width: '100%',
                   backgroundColor: selectedRoute ? "#dc2626" : '#6b7280',
-                  color: "white", border: "none", borderRadius: "6px", cursor: selectedRoute ? "pointer" : 'not-allowed',
+                  color: "white", border: "none", borderRadius: "5px", cursor: selectedRoute ? "pointer" : 'not-allowed',
                   fontWeight: "bold", fontFamily: "Montserrat", opacity: selectedRoute ? 1 : 0.6, fontSize: '0.9rem'
               }}>
                   Reset Selection
@@ -472,7 +473,7 @@ const MapView = () => {
       {/* Legend */}
       <div style={{
           position: "absolute", top: "-5px", right: "50px", backgroundColor: "rgba(0, 0, 0, 0.8)",
-          color: "white", padding: "10px 12px", borderRadius: "6px", zIndex: 10, boxShadow: "0 2px 4px rgba(0, 0, 0, 0.4)", fontSize: '0.8rem'
+          color: "white", padding: "10px 12px", borderRadius: "5px", zIndex: 10, boxShadow: "0 2px 4px rgba(0, 0, 0, 0.4)", fontSize: '0.8rem'
       }}>
           <h4 style={{ marginBottom: "8px", fontWeight: "bold", textAlign: "center", marginTop: 0, fontSize: '0.9rem' }}>Legend</h4>
           <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>

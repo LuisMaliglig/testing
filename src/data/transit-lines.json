@@ -1115,16 +1115,16 @@
         "stops": [
           "Dr. Santos",
           "Ninoy Aquino Avenue", 
-          "PITX",
+          "PITX LRT",
           "MIA Road",
           "Redemptorist-Aseana",
           "Baclaran",
           "EDSA",
           "Libertad",
-          "Gil Puyat",
+          "Gil Puyat LRT",
           "Vito Cruz",
           "Quirino",
-          "Pedro Gil",
+          "Pedro Gil LRT",
           "UN Avenue",
           "Central Terminal",
           "Carriedo",
@@ -1135,7 +1135,7 @@
           "Abad Santos",
           "R. Papa",
           "5th Avenue",
-          "Monumento",
+          "Monumento LRT",
           "Balintawak",
           "Fernando Poe Jr."
         ]
@@ -1219,6 +1219,61 @@
       "type": "Feature",
       "properties": {
         "type": "LRT1-Stop",
+        "name": "Dr. Santos"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [120.989444, 14.485326]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "type": "LRT1-Stop",
+        "name": "Ninoy Aquino Avenue"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [120.994359, 14.499034]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "type": "LRT1-Stop",
+        "name": "PITX LRT"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [120.991220, 14.508216]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "type": "LRT1-Stop",
+        "name": "MIA Road"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [120.992904, 14.518250]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "type": "LRT1-Stop",
+        "name": "Redemptorist-Aseana"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [120.992938, 14.530042]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "type": "LRT1-Stop",
         "name": "Baclaran"
       },
       "geometry": {
@@ -1252,7 +1307,7 @@
       "type": "Feature",
       "properties": {
         "type": "LRT1-Stop",
-        "name": "Gil Puyat"
+        "name": "Gil Puyat LRT"
       },
       "geometry": {
         "type": "Point",
@@ -1285,7 +1340,7 @@
       "type": "Feature",
       "properties": {
         "type": "LRT1-Stop",
-        "name": "Pedro Gil"
+        "name": "Pedro Gil LRT"
       },
       "geometry": {
         "type": "Point",
@@ -1406,7 +1461,7 @@
       "type": "Feature",
       "properties": {
         "type": "LRT1-Stop",
-        "name": "Monumento"
+        "name": "Monumento LRT"
       },
       "geometry": {
         "type": "Point",
@@ -1450,7 +1505,7 @@
           "Betty Go-Belmonte",
           "Araneta Center-Cubao",
           "Katipunan",
-          "Santolan",
+          "Santolan LRT",
           "Marikina-Pasig",
           "Antipolo"
         ]
@@ -1641,7 +1696,7 @@
       "type": "Feature",
       "properties": {
         "type": "LRT2-Stop",
-        "name": "Santolan"
+        "name": "Santolan LRT"
       },
       "geometry": {
         "type": "Point",

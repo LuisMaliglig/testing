@@ -345,7 +345,7 @@ const RouteBreakdown = () => {
                             <select
                                 id="sort-select" value={sortBy} onChange={handleSortChange}
                                 style={{ backgroundColor: 'rgba(255, 255, 255, 0.1)', color: 'white',
-                                         border: '1px solid rgba(255, 255, 255, 0.3)', borderRadius: '4px', padding: '5px 8px',
+                                         border: '1px solid rgba(255, 255, 255, 0.3)', borderRadius: '5px', padding: '5px 8px',
                                          fontSize: '0.85rem', flexGrow: 1 }} >
                                 <option style={{ color: 'black', backgroundColor: 'white' }} value="duration">Fastest</option>
                                 <option style={{ color: 'black', backgroundColor: 'white' }} value="distance">Shortest Distance</option>
@@ -367,7 +367,7 @@ const RouteBreakdown = () => {
                                        return (
                                            <li key={label + index} onClick={() => { setCurrentlySelectedIdx(index); setSelectedRouteLabelState(label); }}
                                                style={{ border: `2px solid ${isSelected ? '#6ee7b7' : 'rgba(255,255,255,0.2)'}`, backgroundColor: isSelected ? "rgba(110, 231, 183, 0.2)" : "rgba(255, 255, 255, 0.1)",
-                                                        borderRadius: "6px", padding: "10px 12px", marginBottom: "8px", cursor: "pointer", transition: 'background-color 0.2s ease, border-color 0.2s ease' }}
+                                                        borderRadius: "5px", padding: "10px 12px", marginBottom: "8px", cursor: "pointer", transition: 'background-color 0.2s ease, border-color 0.2s ease' }}
                                                onMouseEnter={(e) => { if (!isSelected) e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.2)'; }}
                                                onMouseLeave={(e) => { if (!isSelected) e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.1)'; }} >
                                                <div style={{ fontWeight: '600', fontSize: '0.95rem', marginBottom: '4px' }}>{label}</div>
@@ -396,7 +396,7 @@ const RouteBreakdown = () => {
                            {currentSegments.length > 0 ? (
                                <div style={{
                                    display: "flex", height: "25px", width: "100%", overflow: "hidden",
-                                   borderRadius: "6px", marginBottom: "20px", backgroundColor: '#374151'
+                                   borderRadius: "5px", marginBottom: "20px", backgroundColor: '#374151'
                                }}>
                                    {currentSegments.map((seg, idx) => {
                                        if (!seg || !seg.mode) return <div key={`invalid-seg-${idx}`} style={{width: '5px', backgroundColor: 'red'}}></div>;
