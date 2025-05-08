@@ -12,7 +12,6 @@ const modeColors = {
     MRT: "#facc15", // Yellow-400
     LRT1: "#22c55e", // Green-500
     LRT2: "#7A07D1", // Purple
-    LRT: "#22c55e",   // Fallback LRT
     Jeep: "#FFA500", // Orange
     "P2P-Bus": "#f97316", // Orange-500
     Bus: "#3b82f6", // Blue-500
@@ -134,10 +133,40 @@ const MapView = () => {
       }
   }, [calculateShiftedCenter, updateNearestRoutes]);
 
+  // --- Function to Add Transit Layers (Corrected Layout Application) ---
   const addAllLayers = useCallback((map) => {
-        const safeAddLayer = (layerConfig) => { /* ... */ };
-        const layers = [ /* ... */ ];
-        layers.forEach(layer => { /* ... */ });
+        const safeAddLayer = (layerConfig) => {
+            if (!map.getLayer(layerConfig.id)) {
+                try { map.addLayer(layerConfig); }
+                catch (e) { console.error(`Failed to add layer '${layerConfig.id}':`, e); }
+            }
+        };
+        // Define layer configurations including LRT1/LRT2 stops and P2P stops
+        const layers = [
+            { id: "mrt-line", type: "line", filter: ["==", ["get", "type"], "MRT"], paint: { "line-color": modeColors.MRT, "line-width": 4 } },
+            { id: "lrt1-line", type: "line", filter: ["==", ["get", "type"], "LRT1"], paint: { "line-color": modeColors.LRT1, "line-width": 4 } },
+            { id: "lrt2-line", type: "line", filter: ["==", ["get", "type"], "LRT2"], paint: { "line-color": modeColors.LRT2, "line-width": 4 } },
+            { id: "jeep-lines", type: "line", filter: ["==", ["get", "type"], "Jeep"], paint: { "line-color": modeColors.Jeep, "line-width": 3, 'line-opacity': 0.7 } },
+            { id: "p2p-bus-lines", type: "line", filter: ["==", ["get", "type"], "P2P-Bus"], paint: { "line-color": modeColors['P2P-Bus'], "line-width": 3 } },
+            { id: "bus-lines", type: "line", filter: ["==", ["get", "type"], "Bus"], paint: { "line-color": modeColors.Bus, "line-width": 3 } },
+            { id: "mrt-stops", type: "circle", filter: ["==", ["get", "type"], "MRT-Stop"], paint: { "circle-radius": 5, "circle-color": modeColors.MRT, "circle-stroke-color": "#fff", "circle-stroke-width": 1 } },
+            { id: "lrt1-stops", type: "circle", filter: ["==", ["get", "type"], "LRT1-Stop"], paint: { "circle-radius": 5, "circle-color": modeColors.LRT1, "circle-stroke-color": "#fff", "circle-stroke-width": 1 } },
+            { id: "lrt2-stops", type: "circle", filter: ["==", ["get", "type"], "LRT2-Stop"], paint: { "circle-radius": 5, "circle-color": modeColors.LRT2, "circle-stroke-color": "#fff", "circle-stroke-width": 1 } },
+            { id: "bus-stops", type: "circle", filter: ["==", ["get", "type"], "Bus-Stop"], paint: { "circle-radius": 5, "circle-color": modeColors.Bus, "circle-stroke-color": "#fff", "circle-stroke-width": 1 } },
+            { id: "p2p-bus-stops", type: "circle", source: "transit-route", filter: ["==", ["get", "type"], "P2P-Bus-Stop"], paint: { "circle-radius": 5, "circle-color": modeColors['P2P-Bus'], "circle-stroke-color": "#fff", "circle-stroke-width": 1 } },
+        ];
+
+        // Add each layer
+        layers.forEach(layer => {
+            // *** FIX: Only apply line layout properties to line layers ***
+            const layoutProps = layer.type === 'line' ? { "line-join": "round", "line-cap": "round" } : {};
+            safeAddLayer({
+                ...layer,
+                source: "transit-route",
+                // Conditionally add layout based on type
+                ...(layer.type === 'line' && { layout: layoutProps })
+            });
+        });
         console.log("Transit layers added/verified.");
   }, []); // modeColors is constant
 
@@ -182,8 +211,11 @@ const MapView = () => {
       if (!mapRef.current) return;
       const stopLayers = ["mrt-stops", "lrt1-stops", "lrt2-stops", "bus-stops", "p2p-bus-stops"];
       const lineLayers = ["mrt-line", "lrt1-line", "lrt2-line", "bus-lines", "p2p-bus-lines", "jeep-lines"];
-      const safeSetLayoutProperty = (layerId, prop, value) => { /* ... */ };
-
+      const safeSetLayoutProperty = (layerId, prop, value) => {
+          if (mapRef.current?.getLayer(layerId)) {
+              try { mapRef.current.setLayoutProperty(layerId, prop, value); } catch (e) { /* ignore */ }
+          }
+      };
       if (selectedRoute) {
           const selectedMode = selectedRoute.properties?.type;
           const isBusOrP2P = selectedMode === 'Bus' || selectedMode === 'P2P-Bus';
@@ -201,7 +233,6 @@ const MapView = () => {
               safeSetLayoutProperty(layerId, "visibility", showLayer ? "visible" : "none");
           });
       } else {
-          // Set visibility based on filters when nothing is selected
           safeSetLayoutProperty("mrt-stops", "visibility", vehicleFilters.MRT ? "visible" : "none");
           safeSetLayoutProperty("lrt1-stops", "visibility", vehicleFilters.LRT1 ? "visible" : "none");
           safeSetLayoutProperty("lrt2-stops", "visibility", vehicleFilters.LRT2 ? "visible" : "none");
@@ -243,7 +274,7 @@ const MapView = () => {
             setMarkerCenter({ lng: initialShiftedCenter.lng, lat: initialShiftedCenter.lat });
             updateNearestRoutes(initialShiftedCenter); // Initial nearest routes calculation
         }
-        // Event listener managed separately
+        // Event listener is managed by a separate effect now
     });
      map.on('error', (e) => console.error("MapLibre Error:", e));
     return () => {
@@ -258,9 +289,9 @@ const MapView = () => {
       if (mapRef.current && mapRef.current.isStyleLoaded()) {
           const currentMap = mapRef.current;
           currentMap.on('moveend', handleMapMoveEnd); // Use the memoized handler
-          console.log("Map 'moveend' listener attached/updated.");
+          // console.log("Map 'moveend' listener attached/updated.");
           return () => {
-              if (currentMap.isStyleLoaded()) {
+              if (currentMap.isStyleLoaded()) { // Check again before removing
                   try { currentMap.off('moveend', handleMapMoveEnd); } catch (e) {/*ignore*/}
                   // console.log("Map 'moveend' listener detached.");
               }
@@ -440,7 +471,7 @@ const MapView = () => {
 
       {/* Legend */}
       <div style={{
-          position: "absolute", top: "16px", right: "16px", backgroundColor: "rgba(0, 0, 0, 0.8)",
+          position: "absolute", top: "-5px", right: "50px", backgroundColor: "rgba(0, 0, 0, 0.8)",
           color: "white", padding: "10px 12px", borderRadius: "6px", zIndex: 10, boxShadow: "0 2px 4px rgba(0, 0, 0, 0.4)", fontSize: '0.8rem'
       }}>
           <h4 style={{ marginBottom: "8px", fontWeight: "bold", textAlign: "center", marginTop: 0, fontSize: '0.9rem' }}>Legend</h4>
