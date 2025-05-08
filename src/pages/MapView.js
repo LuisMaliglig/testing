@@ -27,7 +27,7 @@ const modeColors = {
 const INITIAL_MAP_CENTER = { lng: 121.05, lat: 14.55 }; // Centered more on Metro Manila
 const INITIAL_MAP_ZOOM = 11;
 // Define proximity threshold for showing stops along a selected line
-const MAX_STOP_DISTANCE_TO_LINE_KM = 0.005; 
+const MAX_STOP_DISTANCE_TO_LINE_KM = 0.001; 
 
 const MapView = () => {
   const mapContainerRef = useRef(null);
