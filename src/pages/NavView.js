@@ -13,7 +13,6 @@ const modeColors = {
     MRT: "#facc15", // Yellow-400
     LRT1: "#22c55e", // Green-500
     LRT2: "#7A07D1", // Purple
-    LRT: "#22c55e",   // Fallback LRT (using LRT1 color)
     Jeep: "#FFA500", // Orange
     "P2P-Bus": "#f97316", // Orange-500
     Bus: "#3b82f6", // Blue-500
