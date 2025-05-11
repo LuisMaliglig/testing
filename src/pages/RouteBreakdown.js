@@ -68,6 +68,8 @@ const RouteBreakdown = () => {
     const [isMapLoaded, setIsMapLoaded] = useState(false);
     const [mapFeatures, setMapFeatures] = useState({ type: 'FeatureCollection', features: [] });
     const [expandedSegmentIndex, setExpandedSegmentIndex] = useState(null);
+    const [isSidebarVisible, setIsSidebarVisible] = useState(true);
+
 
     // --- Sorting Logic ---
     const sortedSuggestedRoutes = useMemo(() => {
@@ -307,169 +309,327 @@ const RouteBreakdown = () => {
         setExpandedSegmentIndex(prevIndex => prevIndex === index ? null : index);
     };
 
+    const toggleSidebar = () => {
+        setIsSidebarVisible(prevState => !prevState);
+    };
 
-    // --- JSX Return ---
+    useEffect(() => {
+        const iconsLink = document.getElementById('material-icons-link');
+        if (!iconsLink) {
+             const link = document.createElement('link'); link.id = 'material-icons-link';
+             link.href = 'https://fonts.googleapis.com/icon?family=Material+Icons';
+             link.rel = 'stylesheet'; document.head.appendChild(link);
+             return () => { const el = document.getElementById('material-icons-link'); if (el) el.remove(); };
+        }
+      }, []);
+
+
+    const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+
+    useEffect(() => {
+        const handleResize = () => {
+            setIsMobile(window.innerWidth < 768);
+        };
+        window.addEventListener('resize', handleResize);
+        handleResize(); // Initial check
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
+
+    const sidebarStyle = {
+        position: "absolute",
+        left: 0,
+        top: 0,
+        width: isMobile ? (isSidebarVisible ? "100%" : "0") : "350px", // Mobile is full width when visible
+        height: isMobile ? "100vh" : "100%", // Mobile is full viewport height
+        marginTop: isMobile ? "0" : "0", // No top margin for mobile, starts from the very top
+        backdropFilter: "blur(5px)",
+        backgroundColor: "rgba(0, 0, 0, 0.85)",
+        zIndex: 10,
+        display: "flex",
+        flexDirection: "column",
+        boxShadow: '3px 0px 10px rgba(0,0,0,0.3)',
+        transform: !isMobile ? "translateX(0)" : (isSidebarVisible ? "translateX(0)" : "translateX(-100%)"),
+        transition: "transform 0.3s ease-in-out, width 0.3s ease-in-out, height 0.3s ease-in-out, margin-top 0.3s ease-in-out",
+        overflow: 'hidden',
+        borderRadius: isMobile ? "0" : "0", // No border radius if it's edge-to-edge full screen on mobile
+    };
+
+    const sidebarContentContainerStyle = {
+        color: "white",
+        flexGrow: 1,
+        display: 'flex',
+        flexDirection: 'column',
+        height: "100%",
+        overflow: 'hidden',
+    };
+
+    const topBarStyle = {
+        padding: isMobile ? "10px 12px" : "16px",
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        flexShrink: 0,
+        borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
+    };
+
+    const scrollableContentAreaStyle = {
+        padding: isMobile ? "10px 12px 12px 12px" : "0 16px 16px 16px",
+        overflowY: 'auto',
+        flexGrow: 1,
+    };
+
+    // Hamburger menu button: Only visible on mobile when sidebar is closed
+    const menuButtonContainerStyle = {
+        position: "fixed",
+        top: isMobile ? "15px" : "16px", // Using mobile value, as it's hidden on desktop
+        right: isMobile ? "15px" : "16px", // Using mobile value
+        zIndex: 20,
+        display: (isMobile && !isSidebarVisible) ? "flex" : "none",
+        gap: "10px"
+    };
+
+    // Close button inside the sidebar: Only visible on mobile when sidebar is open
+    const closeButtonStyleMobile = {
+        backgroundColor: "transparent",
+        color: "#fff",
+        border: "none",
+        cursor: "pointer",
+        padding: "5px",
+        display: 'flex', // This style is applied if the button is rendered
+        alignItems: 'center',
+        justifyContent: 'center'
+    };
+
     return (
-        <div style={{ position: "relative", height: "100vh", fontFamily: "Montserrat, sans-serif" }}>
+        <div style={{ position: "relative", height: "100vh", width: "100vw", fontFamily: "Montserrat, sans-serif", overflow: (isMobile && isSidebarVisible) ? 'hidden' : 'visible' }}>
+            {/* Hamburger Menu Button: Will not display on desktop due to menuButtonContainerStyle.display */}
+            <div style={menuButtonContainerStyle}>
+                <button
+                    onClick={toggleSidebar} // This toggleSidebar will primarily affect mobile
+                    style={{
+                        width: "36px",
+                        height: "36px",
+                        backgroundColor: "#1e40af",
+                        color: "#fff",
+                        borderRadius: "50%",
+                        border: "none",
+                        cursor: "pointer",
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        boxShadow: '0 2px 5px rgba(0,0,0,0.2)'
+                    }}
+                >
+                    <span className="material-icons" style={{ fontSize: "20px" }}>menu</span>
+                </button>
+            </div>
+
             {/* Sidebar */}
-            <div style={{
-                position: "absolute", left: 0, top: 0, width: "350px", height: "100%",
-                backdropFilter: "blur(5px)", backgroundColor: "rgba(0, 0, 0, 0.75)",
-                zIndex: 10, display: "flex", flexDirection: "column",
-                boxShadow: '3px 0px 10px rgba(0,0,0,0.3)'
-            }}>
-                {/* Sidebar Content */}
-                <div style={{ color: "white", overflowY: 'auto', flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
-                   {/* Top Bar */}
-                   <div style={{ padding: "16px", display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
-                       <img src={logo} alt="Logo" style={{ width: "40px", height: "40px", cursor: "pointer" }} onClick={() => navigate("/")}/>
-                       <button onClick={() => navigate("/nav-view")} style={{
-                           padding: "8px 12px", backgroundColor: "#1e40af", color: "#fff",
-                           border: "none", borderRadius: "5px", cursor: "pointer", fontFamily: "Montserrat, sans-serif", fontSize: '0.9rem'
-                       }}>
-                           Back to Options
-                       </button>
-                   </div>
+            <div style={sidebarStyle}>
+                <div style={sidebarContentContainerStyle}>
+                    <div style={topBarStyle}>
+                        <img
+                            src={logo}
+                            alt="Logo"
+                            style={{
+                                width: isMobile ? "30px" : "40px",
+                                height: isMobile ? "30px" : "40px",
+                                cursor: "pointer"
+                            }}
+                            onClick={() => navigate("/")}
+                        />
+                        <div style={{ display: "flex", gap: isMobile ? "8px" : "12px", alignItems: 'center' }}>
+                            <button
+                                onClick={() => navigate("/nav-view")}
+                                style={{
+                                    padding: isMobile ? "5px 8px" : "8px 12px",
+                                    backgroundColor: "#1e40af",
+                                    color: "#fff",
+                                    border: "none",
+                                    borderRadius: "5px",
+                                    cursor: "pointer",
+                                    fontFamily: "Montserrat, sans-serif",
+                                    fontSize: isMobile ? '0.75rem' : '0.9rem'
+                                }}
+                            >
+                                Back to Options
+                            </button>
+                            {/* Close button inside sidebar: Only for mobile */}
+                            {isMobile && isSidebarVisible && (
+                                <button
+                                    onClick={toggleSidebar}
+                                    style={closeButtonStyleMobile}
+                                >
+                                    <span className="material-icons" style={{ fontSize: "24px" }}>close</span>
+                                </button>
+                            )}
+                        </div>
+                    </div>
 
-                   {/* Scrollable Content Area */}
-                   <div style={{ padding: "0 16px 16px 16px", overflowY: 'auto', flexGrow: 1 }}>
-                       {/* Header */}
-                       <h1 style={{ fontSize: "1.4rem", fontWeight: "bold", marginBottom: "8px" }}>Route Options</h1>
-                       <p style={{ marginBottom: "16px", fontSize: '0.85rem', color: '#d1d5db' }}>
-                           From <strong>{origin}</strong> to <strong>{destination}</strong>
-                       </p>
+                    <div style={scrollableContentAreaStyle}>
+                        <h1 style={{ fontSize: isMobile ? "1.1rem" : "1.4rem", fontWeight: "bold", marginBottom: "8px", marginTop: isMobile ? '5px' : '0' }}>Route Options</h1>
+                        <p style={{ marginBottom: "12px", fontSize: isMobile ? '0.75rem' : '0.85rem', color: '#d1d5db' }}>
+                            From <strong>{origin}</strong> to <strong>{destination}</strong>
+                        </p>
 
-                       {/* Sort Dropdown */}
-                       <div style={{ marginBottom: '15px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                            <label htmlFor="sort-select" style={{ fontSize: '0.9rem', fontWeight: '600', color: '#d1d5db' }}>Sort by:</label>
+                        <div style={{ marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <label htmlFor="sort-select" style={{ fontSize: isMobile ? '0.8rem' : '0.9rem', fontWeight: '600', color: '#d1d5db' }}>Sort by:</label>
                             <select
                                 id="sort-select" value={sortBy} onChange={handleSortChange}
-                                style={{ backgroundColor: 'rgba(255, 255, 255, 0.1)', color: 'white',
-                                         border: '1px solid rgba(255, 255, 255, 0.3)', borderRadius: '5px', padding: '5px 8px',
-                                         fontSize: '0.85rem', flexGrow: 1 }} >
+                                style={{
+                                    backgroundColor: 'rgba(255, 255, 255, 0.1)', color: 'white',
+                                    border: '1px solid rgba(255, 255, 255, 0.3)', borderRadius: '5px', padding: '4px 6px',
+                                    fontSize: isMobile ? '0.75rem' : '0.85rem', flexGrow: 1
+                                }} >
                                 <option style={{ color: 'black', backgroundColor: 'white' }} value="duration">Fastest</option>
                                 <option style={{ color: 'black', backgroundColor: 'white' }} value="distance">Shortest Distance</option>
                                 <option style={{ color: 'black', backgroundColor: 'white' }} value="fare">Cheapest</option>
                             </select>
-                       </div>
+                        </div>
 
-                       {/* Route Options List */}
-                       <div style={{ marginBottom: '20px' }}>
-                           <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-                               {(Array.isArray(sortedSuggestedRoutes) && sortedSuggestedRoutes.length > 0) ? (
-                                   sortedSuggestedRoutes.map((route, index) => {
-                                       if (!route?.properties?.label) { return <li key={`invalid-${index}`} style={{ color: 'red', padding: '5px' }}>Invalid route data</li>; }
-                                       const isSelected = index === currentlySelectedIdx;
-                                       const label = route.properties.label;
-                                       const durationMin = route.properties.summary_duration ? (route.properties.summary_duration / 60).toFixed(0) : '?';
-                                       const fare = route.properties.total_fare;
-                                       const fareString = typeof fare === 'number' ? `P${fare.toFixed(2)}` : '';
-                                       return (
-                                           <li key={label + index} onClick={() => { setCurrentlySelectedIdx(index); setSelectedRouteLabelState(label); }}
-                                               style={{ border: `2px solid ${isSelected ? '#6ee7b7' : 'rgba(255,255,255,0.2)'}`, backgroundColor: isSelected ? "rgba(110, 231, 183, 0.2)" : "rgba(255, 255, 255, 0.1)",
-                                                        borderRadius: "5px", padding: "10px 12px", marginBottom: "8px", cursor: "pointer", transition: 'background-color 0.2s ease, border-color 0.2s ease' }}
-                                               onMouseEnter={(e) => { if (!isSelected) e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.2)'; }}
-                                               onMouseLeave={(e) => { if (!isSelected) e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.1)'; }} >
-                                               <div style={{ fontWeight: '600', fontSize: '0.95rem', marginBottom: '4px' }}>{label}</div>
-                                               <div style={{ fontSize: '0.8rem', display: 'flex', justifyContent: 'space-between', color: '#d1d5db' }}>
-                                                   <span>{durationMin !== '?' ? `~ ${durationMin} min` : 'Est. time unavailable'}</span>
-                                                   <span>{fareString || 'Fare N/A'}</span>
-                                               </div>
-                                           </li> );
-                                   })
-                               ) : ( <li style={{ color: '#a0aec0' }}>No route options generated.</li> )}
-                           </ul>
-                       </div>
-
-                       {/* Separator */}
-                       <hr style={{ border: 'none', borderTop: '1px solid rgba(255, 255, 255, 0.3)', margin: '20px 0' }} />
-
-                       {/* Display Details for Selected Route */}
-                       {currentRouteProps ? (
-                       <>
-                           <h2 style={{ fontSize: '1.1rem', marginBottom: '10px', fontWeight: '600' }}>Selected Route Details</h2>
-                            <p style={{marginBottom: '15px', fontSize: '0.9rem'}}>
-                                <span style={{fontWeight: 'bold'}}>{currentRouteLabel}</span> (~{getCurrentTotalDurationMin()} min, {getCurrentTotalFare() || 'Fare N/A'})
-                            </p>
-
-                           {/* Timeline */}
-                           {currentSegments.length > 0 ? (
-                               <div style={{
-                                   display: "flex", height: "25px", width: "100%", overflow: "hidden",
-                                   borderRadius: "5px", marginBottom: "20px", backgroundColor: '#374151'
-                               }}>
-                                   {currentSegments.map((seg, idx) => {
-                                       if (!seg || !seg.mode) return <div key={`invalid-seg-${idx}`} style={{width: '5px', backgroundColor: 'red'}}></div>;
-                                       const totalDuration = currentRouteProps?.summary_duration || 1;
-                                       const widthPercent = totalDuration > 0 ? (((seg?.duration || 0) / totalDuration) * 100) : 0;
-                                       const displayWidth = Math.max(widthPercent, 1);
-                                       return (
-                                           <div key={`${seg.mode}-${idx}`} title={`${seg.mode}: ${((seg?.duration || 0) / 60).toFixed(1)} min`}
-                                               style={{ width: `${displayWidth}%`, backgroundColor: modeColors[seg.mode] || "#999", height: "100%", display: "flex", alignItems: "center", justifyContent: "center",
-                                                        fontSize: "0.7rem", color: "#fff", fontWeight: "bold", overflow: 'hidden', whiteSpace: 'nowrap',
-                                                        borderRight: idx < currentSegments.length - 1 ? '1px solid rgba(255,255,255,0.2)' : 'none' }} >
-                                               {widthPercent > 18 ? seg.mode : (widthPercent > 8 ? <span className="material-icons" style={{fontSize: '16px'}}>{getModeIcon(seg.mode)}</span> : '')}
-                                           </div> );
-                                   })}
-                               </div>
-                           ) : ( <p style={{fontSize: '0.9rem', color: '#a0aec0'}}>No segments to display.</p> )}
-
-                           {/* Steps Display */}
-                           {currentSteps.length > 0 ? ( // Driving Steps
-                               <div style={{ backgroundColor: "rgba(255, 255, 255, 0.08)", borderRadius: "5px", padding: "12px 16px", marginBottom: "5px", textAlign: "left", maxHeight: 'calc(100vh - 500px)', overflowY: 'auto' }}>
-                                   <h3 style={{ fontSize: "1.0rem", marginBottom: "10px", fontWeight: '600' }}>Driving Steps</h3>
-                                   {currentSteps.map((step, idx) => (
-                                       <div key={idx} style={{ display: "flex", alignItems: "center", marginBottom: "8px", fontSize: '0.85rem' }}>
-                                           <div style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: "#6ee7b7", marginRight: "10px", flexShrink: 0 }} />
-                                           <span>{(step?.Distance || 0).toFixed(0)} m - {((step?.DurationSeconds || 0) / 60).toFixed(1)} min</span>
-                                       </div>
-                                   ))}
-                               </div>
-                           ) : currentSegments.length > 0 && currentRouteProps?.primary_mode !== 'Driving' ? ( // Transit Segments
-                               <div style={{ backgroundColor: "rgba(255, 255, 255, 0.08)", borderRadius: "5px", padding: "12px 16px", marginBottom: "5px", textAlign: "left", maxHeight: 'calc(100vh - 500px)', overflowY: 'auto' }}>
-                                   <h3 style={{ fontSize: "1.0rem", marginBottom: "10px", fontWeight: '600' }}>Transit Segments</h3>
-                                   {currentSegments.map((seg, idx) => {
-                                        if (!seg || !seg.mode) return <div key={`invalid-detail-${idx}`} style={{color: 'red', fontSize: '0.85rem'}}>Invalid segment data</div>;
-                                        const isExpanded = expandedSegmentIndex === idx;
-                                        const hasStopsToShow = Array.isArray(seg.fullStopSequence) && seg.fullStopSequence.length > 0;
-                                        const isTransit = seg.mode !== 'Walk' && seg.mode !== 'Driving';
-
+                        <div style={{ marginBottom: '15px' }}>
+                            <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+                                {(Array.isArray(sortedSuggestedRoutes) && sortedSuggestedRoutes.length > 0) ? (
+                                    sortedSuggestedRoutes.map((route, index) => {
+                                        if (!route?.properties?.label) { return <li key={`invalid-${index}`} style={{ color: 'red', padding: '5px', fontSize: isMobile ? '0.75rem' : '0.85rem' }}>Invalid route data</li>; }
+                                        const isSelected = index === currentlySelectedIdx;
+                                        const label = route.properties.label;
+                                        const durationMin = route.properties.summary_duration ? (route.properties.summary_duration / 60).toFixed(0) : '?';
+                                        const fare = route.properties.total_fare;
+                                        const fareString = typeof fare === 'number' ? `P${fare.toFixed(2)}` : '';
                                         return (
-                                            <div key={`seg-detail-${idx}`} style={{ marginBottom: "8px", borderLeft: `3px solid ${modeColors[seg.mode] || '#ccc'}`, paddingLeft: '8px' }}>
-                                                <div onClick={isTransit ? () => handleSegmentClick(idx) : undefined}
-                                                     style={{ display: "flex", alignItems: "center", fontSize: '0.85rem', cursor: isTransit ? 'pointer' : 'default', padding: '5px 0' }} >
-                                                    <span className="material-icons" style={{ marginRight: '8px', color: modeColors[seg.mode] || '#ccc', fontSize: '20px' }}>{getModeIcon(seg.mode)}</span>
-                                                    <span style={{flexGrow: 1}}>{seg.label || seg.mode} ({((seg?.duration || 0) / 60).toFixed(1)} min, {(seg?.distance / 1000).toFixed(1)} km)</span>
-                                                     {seg.fare > 0 && <span style={{marginLeft: '10px', fontWeight: 'bold'}}>(P{seg.fare.toFixed(2)})</span>}
-                                                     {isTransit && hasStopsToShow && (
-                                                         <span className="material-icons" style={{ fontSize: '18px', marginLeft: '5px', color: '#a0aec0' }}>
-                                                             {isExpanded ? 'expand_less' : 'expand_more'}
-                                                         </span>
-                                                     )}
+                                            <li key={label + index} onClick={() => { setCurrentlySelectedIdx(index); setSelectedRouteLabelState(label); }}
+                                                style={{
+                                                    border: `2px solid ${isSelected ? '#6ee7b7' : 'rgba(255,255,255,0.2)'}`, backgroundColor: isSelected ? "rgba(110, 231, 183, 0.2)" : "rgba(255, 255, 255, 0.1)",
+                                                    borderRadius: "5px", padding: isMobile ? "6px 8px" : "10px 12px", marginBottom: "6px", cursor: "pointer", transition: 'background-color 0.2s ease, border-color 0.2s ease'
+                                                }}
+                                                onMouseEnter={(e) => { if (!isSelected) e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.2)'; }}
+                                                onMouseLeave={(e) => { if (!isSelected) e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.1)'; }} >
+                                                <div style={{ fontWeight: '600', fontSize: isMobile ? '0.85rem' : '0.95rem', marginBottom: '3px' }}>{label}</div>
+                                                <div style={{ fontSize: isMobile ? '0.7rem' : '0.8rem', display: 'flex', justifyContent: 'space-between', color: '#d1d5db' }}>
+                                                    <span>{durationMin !== '?' ? `~ ${durationMin} min` : 'Est. time unavailable'}</span>
+                                                    <span>{fareString || 'Fare N/A'}</span>
                                                 </div>
-                                                {isExpanded && hasStopsToShow && (
-                                                    <ol style={{ marginLeft: '25px', marginTop: '5px', marginBottom: '10px', fontSize: '0.8rem', color: '#cbd5e1', paddingLeft: '15px', listStyle: 'decimal' }}>
-                                                        {seg.fullStopSequence.map((stopName, stopIdx) => (
-                                                            <li key={`${idx}-${stopIdx}`} style={{ padding: '2px 0', borderBottom: stopIdx < seg.fullStopSequence.length - 1 ? '1px dotted rgba(255,255,255,0.2)' : 'none' }}>
-                                                                {stopIdx === 0 ? <strong>{stopName} (Board)</strong> : stopIdx === seg.fullStopSequence.length - 1 ? <strong>{stopName} (Alight)</strong> : stopName}
-                                                            </li>
-                                                        ))}
-                                                    </ol>
-                                                )}
-                                            </div>
-                                        );
-                                   })}
-                               </div>
-                           ) : ( <p style={{fontSize: '0.9rem', color: '#a0aec0'}}>No steps available for this route.</p> )}
-                       </>
-                       ) : ( <p style={{fontSize: '0.9rem', color: '#a0aec0', textAlign:'center', marginTop: '30px'}}>Select a route above to see details.</p> )}
-                   </div> {/* End Scrollable Content Area */}
-                </div> {/* End Sidebar Content */}
-            </div> {/* End Sidebar */}
+                                            </li>);
+                                    })
+                                ) : (<li style={{ color: '#a0aec0', fontSize: isMobile ? '0.8rem' : '0.9rem', textAlign: 'center' }}>No route options generated.</li>)}
+                            </ul>
+                        </div>
 
-            {/* Map Container */}
-            <div ref={mapContainerRef} style={{ width: "100%", height: "100%", position: "absolute", top: 0, left: 0, zIndex: 1 }} />
-        </div> // End Root Div
+                        <hr style={{ border: 'none', borderTop: '1px solid rgba(255, 255, 255, 0.2)', margin: '15px 0' }} />
+
+                        {currentRouteProps ? (
+                            <>
+                                <h2 style={{ fontSize: isMobile ? '1rem' : '1.1rem', marginBottom: '8px', fontWeight: '600' }}>Selected Route Details</h2>
+                                <p style={{ marginBottom: '12px', fontSize: isMobile ? '0.8rem' : '0.9rem' }}>
+                                    <span style={{ fontWeight: 'bold' }}>{currentRouteLabel}</span> (~{getCurrentTotalDurationMin()} min, {getCurrentTotalFare() || 'Fare N/A'})
+                                </p>
+                                {currentSegments && currentSegments.length > 0 ? (
+                                    <div style={{
+                                        display: "flex", height: "22px", width: "100%", overflow: "hidden",
+                                        borderRadius: "5px", marginBottom: "15px", backgroundColor: '#374151'
+                                    }}>
+                                        {currentSegments.map((seg, idx) => {
+                                            if (!seg || !seg.mode) return <div key={`invalid-seg-${idx}`} style={{ width: '5px', backgroundColor: 'red' }}></div>;
+                                            const totalDuration = currentRouteProps?.summary_duration || 1;
+                                            const durationOfSegment = seg?.duration || 0;
+                                            const widthPercent = totalDuration > 0 ? ((durationOfSegment / totalDuration) * 100) : (currentSegments.length > 0 ? 100/currentSegments.length : 0);
+                                            const displayWidth = Math.max(widthPercent, 2);
+                                            return (
+                                                <div key={`${seg.mode}-${idx}`} title={`${seg.mode}: ${((durationOfSegment) / 60).toFixed(1)} min`}
+                                                    style={{
+                                                        width: `${displayWidth}%`, backgroundColor: modeColors[seg.mode] || "#999", height: "100%", display: "flex", alignItems: "center", justifyContent: "center",
+                                                        fontSize: "0.65rem", color: "#fff", fontWeight: "bold", overflow: 'hidden', whiteSpace: 'nowrap',
+                                                        borderRight: idx < currentSegments.length - 1 ? '1px solid rgba(255,255,255,0.2)' : 'none'
+                                                    }} >
+                                                    {widthPercent > 18 ? seg.mode : (widthPercent > 8 ? <span className="material-icons" style={{ fontSize: '14px' }}>{getModeIcon(seg.mode)}</span> : '')}
+                                                </div>);
+                                        })}
+                                    </div>
+                                ) : (<p style={{ fontSize: isMobile ? '0.8rem' : '0.9rem', color: '#a0aec0', textAlign: 'center' }}>No segments to display.</p>)}
+
+                                {currentSteps && currentSteps.length > 0 ? (
+                                    <div style={{ backgroundColor: "rgba(255, 255, 255, 0.08)", borderRadius: "5px", padding: "10px 12px", marginBottom: "5px", textAlign: "left", maxHeight: isMobile ? 'none' : 'calc(100vh - 550px)', overflowY: isMobile ? 'visible' : 'auto' }}>
+                                        <h3 style={{ fontSize: isMobile ? '0.9rem' : "1.0rem", marginBottom: "8px", fontWeight: '600' }}>Driving Steps</h3>
+                                        {currentSteps.map((step, idx) => (
+                                            <div key={idx} style={{ display: "flex", alignItems: "center", marginBottom: "6px", fontSize: isMobile ? '0.75rem' : '0.85rem' }}>
+                                                <div style={{ width: "6px", height: "6px", borderRadius: "50%", backgroundColor: "#6ee7b7", marginRight: "8px", flexShrink: 0 }} />
+                                                <span>{(step?.Distance || 0).toFixed(0)} m - {((step?.DurationSeconds || 0) / 60).toFixed(1)} min</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : currentSegments && currentSegments.length > 0 && currentRouteProps?.primary_mode !== 'Driving' ? (
+                                    <div style={{ backgroundColor: "rgba(255, 255, 255, 0.08)", borderRadius: "5px", padding: "10px 12px", marginBottom: "5px", textAlign: "left", maxHeight: isMobile ? 'none' : 'calc(100vh - 550px)', overflowY: isMobile ? 'visible' : 'auto' }}>
+                                        <h3 style={{ fontSize: isMobile ? '0.9rem' : "1.0rem", marginBottom: "8px", fontWeight: '600' }}>Transit Segments</h3>
+                                        {currentSegments.map((seg, idx) => {
+                                            if (!seg || !seg.mode) return <div key={`invalid-detail-${idx}`} style={{ color: 'red', fontSize: isMobile ? '0.75rem' : '0.85rem' }}>Invalid segment data</div>;
+                                            const isExpanded = expandedSegmentIndex === idx;
+                                            const hasStopsToShow = Array.isArray(seg.fullStopSequence) && seg.fullStopSequence.length > 0;
+                                            const isTransit = seg.mode !== 'Walk' && seg.mode !== 'Driving';
+
+                                            return (
+                                                <div key={`seg-detail-${idx}`} style={{ marginBottom: "6px", borderLeft: `3px solid ${modeColors[seg.mode] || '#ccc'}`, paddingLeft: '6px' }}>
+                                                    <div onClick={isTransit ? () => handleSegmentClick(idx) : undefined}
+                                                        style={{ display: "flex", alignItems: "center", fontSize: isMobile ? '0.75rem' : '0.85rem', cursor: isTransit ? 'pointer' : 'default', padding: '4px 0' }} >
+                                                        <span className="material-icons" style={{ marginRight: '6px', color: modeColors[seg.mode] || '#ccc', fontSize: '18px' }}>{getModeIcon(seg.mode)}</span>
+                                                        <span style={{ flexGrow: 1 }}>{seg.label || seg.mode} ({((seg?.duration || 0) / 60).toFixed(1)} min, {seg.distance ? (seg.distance / 1000).toFixed(1) : '?'} km)</span>
+                                                        {seg.fare > 0 && <span style={{ marginLeft: '8px', fontWeight: 'bold' }}>(P{seg.fare.toFixed(2)})</span>}
+                                                        {isTransit && hasStopsToShow && (
+                                                            <span className="material-icons" style={{ fontSize: '16px', marginLeft: '4px', color: '#a0aec0' }}>
+                                                                {isExpanded ? 'expand_less' : 'expand_more'}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    {isExpanded && hasStopsToShow && (
+                                                        <ol style={{ marginLeft: '20px', marginTop: '4px', marginBottom: '8px', fontSize: isMobile ? '0.7rem' : '0.8rem', color: '#cbd5e1', paddingLeft: '12px', listStyle: 'decimal' }}>
+                                                            {seg.fullStopSequence.map((stopName, stopIdx) => (
+                                                                <li key={`${idx}-${stopIdx}`} style={{ padding: '1px 0', borderBottom: stopIdx < seg.fullStopSequence.length - 1 ? '1px dotted rgba(255,255,255,0.2)' : 'none' }}>
+                                                                    {stopIdx === 0 ? <strong>{stopName} (Board)</strong> : stopIdx === seg.fullStopSequence.length - 1 ? <strong>{stopName} (Alight)</strong> : stopName}
+                                                                </li>
+                                                            ))}
+                                                        </ol>
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                ) : (<p style={{ fontSize: isMobile ? '0.8rem' : '0.9rem', color: '#a0aec0', textAlign: 'center' }}>No steps available for this route.</p>)}
+                            </>
+                        ) : (<p style={{ fontSize: isMobile ? '0.8rem' : '0.9rem', color: '#a0aec0', textAlign: 'center', marginTop: '20px' }}>Select a route above to see details.</p>)}
+                    </div>
+                </div>
+            </div>
+
+            {/* Map Container: On desktop, the map will need to account for the persistent 350px sidebar.
+                Consider adding a left margin/padding to the map container or its internal elements
+                when !isMobile, e.g., style={{ marginLeft: !isMobile ? '350px' : '0' }}
+                or by having the map library adjust its viewable bounds.
+            */}
+            <div ref={mapContainerRef} style={{
+                width: !isMobile ? 'calc(100% - 350px)' : '100%', // Map takes remaining width on desktop
+                height: "100%",
+                position: "absolute",
+                top: 0,
+                left: !isMobile ? '350px' : '0', // Map starts after the sidebar on desktop
+                zIndex: 1
+            }} />
+
+            {/* Mobile Overlay: Only for mobile */}
+            {isMobile && isSidebarVisible && (
+                <div
+                    onClick={toggleSidebar}
+                    style={{
+                        position: 'fixed',
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        backgroundColor: 'rgba(0,0,0,0.4)',
+                        zIndex: 9,
+                    }}
+                />
+            )}
+        </div>
     );
 };
 

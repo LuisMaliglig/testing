@@ -128,8 +128,7 @@ const NavView = () => {
         { id: "lrt1-stops", type: "circle", filter: ["==", ["get", "type"], "LRT1-Stop"], paint: { "circle-radius": 4, "circle-color": modeColors.LRT1, "circle-stroke-color": "#fff", "circle-stroke-width": 1 } },
         { id: "lrt2-stops", type: "circle", filter: ["==", ["get", "type"], "LRT2-Stop"], paint: { "circle-radius": 4, "circle-color": modeColors.LRT2, "circle-stroke-color": "#fff", "circle-stroke-width": 1 } },
         { id: "bus-stops", type: "circle", filter: ["==", ["get", "type"], "Bus-Stop"], paint: { "circle-radius": 4, "circle-color": modeColors.Bus, "circle-stroke-color": "#fff", "circle-stroke-width": 1 } },
-         // Add P2P stops layer if needed
-        // { id: "p2p-bus-stops", type: "circle", filter: ["==", ["get", "type"], "P2P-Bus-Stop"], paint: { "circle-radius": 4, "circle-color": modeColors['P2P-Bus'], "circle-stroke-color": "#fff", "circle-stroke-width": 1 } },
+        { id: "p2p-bus-stops", type: "circle", filter: ["==", ["get", "type"], "P2P-Bus-Stop"], paint: { "circle-radius": 4, "circle-color": modeColors['P2P-Bus'], "circle-stroke-color": "#fff", "circle-stroke-width": 1 } },
     ];
 
     // Add each layer
@@ -308,107 +307,156 @@ const NavView = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [processedRoutes, selectedRouteIndex, awsRouteData, selectionMode]);
 
+    const isMobile = window.innerWidth <= 640;
 
   // --- JSX Return Statement ---
+
   return (
     <div style={{ position: "relative", height: "100vh", fontFamily: "Montserrat, sans-serif" }}>
       {/* Map Container */}
-      <div ref={mapContainerRef} style={{ width: "100%", height: "100%", position: "absolute", top: 0, left: 0 }}/>
+      <div ref={mapContainerRef} style={{ width: "100%", height: "100%", position: "absolute", top: 0, left: 0 }} />
+
       {/* Overlay UI Panel */}
       <div style={{
-          position: "absolute", top: "20px", left: "20px", width: "340px",
-          maxHeight: "calc(100vh - 40px)", backgroundColor: "rgba(0, 0, 0, 0.75)",
-          backdropFilter: "blur(5px)", color: "white", zIndex: 10, borderRadius: "5px",
-          boxShadow: "0 4px 15px rgba(0, 0, 0, 0.3)", display: "flex", flexDirection: "column",
+        position: "absolute",
+        top: isMobile ? "unset" : "20px",
+        bottom: isMobile ? 0 : "unset",
+        left: isMobile ? 0 : "20px",
+        right: isMobile ? 0 : "unset",
+        width: isMobile ? "100%" : "340px",
+        maxHeight: isMobile ? "50%" : "calc(100vh - 40px)",
+        backgroundColor: "rgba(0, 0, 0, 0.75)",
+        backdropFilter: "blur(5px)",
+        color: "white",
+        zIndex: 10,
+        borderRadius: isMobile ? "0px" : "5px",
+        boxShadow: "0 4px 15px rgba(0, 0, 0, 0.3)",
+        display: "flex",
+        flexDirection: "column"
       }}>
         {/* Panel Header */}
-        <div style={{ padding: "16px", borderBottom: '1px solid rgba(255, 255, 255, 0.2)', flexShrink: 0 }}>
-           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
-                <img src={logo} alt="Logo" style={{ width: "40px", height: "40px", cursor: "pointer" }} onClick={() => navigate("/")}/>
-                <button onClick={() => navigate("/map-view")} style={{ padding: "8px 14px", backgroundColor: "#1e40af", color: "#fff", border: "none", borderRadius: "5px", cursor: "pointer", fontSize: '0.9rem' }}>
-                  Map View
-                </button>
-           </div>
-           <h1 style={{ fontSize: "1.3rem", fontWeight: "600", margin: 0 }}>
-             Select Route
-           </h1>
-        </div>
-
-        {/* Panel Content (Scrollable) */}
-        <div style={{ padding: "16px", overflowY: 'auto', flexGrow: 1 }}>
-
-            {/* Instructions & Status */}
-            <div style={{ marginBottom: '15px', padding: '10px', backgroundColor: 'rgba(255, 255, 255, 0.1)', borderRadius: '5px', fontSize: '0.9rem', textAlign: 'center' }}>
-                {instructionText}
-            </div>
-
-            {/* Display Selected Coords */}
-            <div style={{ fontSize: '0.8rem', marginBottom: '15px', color: '#d1d5db', padding: '8px', backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: '5px' }}>
-                <div><strong>Origin:</strong> {originCoords ? `${originCoords.lat.toFixed(5)}, ${originCoords.lng.toFixed(5)}` : 'Not selected'}</div>
-                <div><strong>Destination:</strong> {destinationCoords ? `${destinationCoords.lat.toFixed(5)}, ${destinationCoords.lng.toFixed(5)}` : 'Not selected'}</div>
-            </div>
-
-            {/* Error Message Display */}
-            {errorMsg && (
-                <div style={{ marginBottom: '15px', padding: '10px', backgroundColor: 'rgba(255, 0, 0, 0.3)', borderRadius: '5px', fontSize: '0.9rem', color: '#fca5a5', textAlign: 'center' }}>
-                    {errorMsg}
-                </div>
-            )}
-
-            {/* Suggest Button */}
-            <button
-              onClick={handleRouteSuggestion}
-              disabled={isLoading || selectionMode !== 'done'}
-              style={{
-                width: "100%", height: "45px",
-                backgroundColor: (selectionMode === 'done' && !isLoading) ? "#1e40af" : '#4b5563',
-                color: "#fff", border: "none", borderRadius: "5px", cursor: (selectionMode === 'done' && !isLoading) ? "pointer" : 'not-allowed',
-                fontSize: "1rem", fontWeight: '600',
-                opacity: (selectionMode === 'done' && !isLoading) ? 1 : 0.6,
-                transition: 'background-color 0.2s ease, opacity 0.2s ease',
-                marginBottom: '10px' // Add margin below
-              }}
-            >
-              {isLoading ? "Calculating..." : "Suggest Routes"}
-            </button>
-
-            {/* <button
-              onClick={handleHardcodedRoute}
-              disabled={isLoading} // Disable only when loading
-              style={{
-                width: "100%", height: "40px", // Slightly smaller
-                backgroundColor: isLoading ? '#4b5563' : '#4a5568', // Darker gray/indigo
-                color: "#cbd5e1", // Lighter text
-                border: "1px solid #4a5568", // Subtle border
-                borderRadius: "5px", cursor: isLoading ? "not-allowed" : "pointer",
-                fontSize: "0.85rem", fontWeight: '600', // Slightly smaller font
-                opacity: isLoading ? 0.6 : 1,
-                transition: 'background-color 0.2s ease, opacity 0.2s ease'
-              }}
-            >
-              {isLoading ? "Calculating..." : "Test: Alabang ➔ Buendia Multi-Modal"}
-            </button> */}
-
-        </div> {/* End Panel Content */}
-        
-      </div> {/* End Overlay UI Panel */}
-      <div style={{
-            position: "absolute", top: "-5px", right: "50px", backgroundColor: "rgba(0, 0, 0, 0.8)",
-            color: "white", padding: "10px 12px", borderRadius: "5px", zIndex: 10, boxShadow: "0 2px 4px rgba(0, 0, 0, 0.4)", fontSize: '0.8rem'
+        <div style={{
+          padding: isMobile ? "12px" : "16px",
+          borderBottom: '1px solid rgba(255, 255, 255, 0.2)',
+          flexShrink: 0
         }}>
-            <h4 style={{ marginBottom: "8px", fontWeight: "bold", textAlign: "center", marginTop: 0, fontSize: '0.9rem' }}>Legend</h4>
-            <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-                {Object.entries(modeColors)
-                    .filter(([mode]) => mode !== 'Walk' && mode !== 'Driving' && !mode.includes('-Stop'))
-                    .map(([mode, color]) => (
-                        <div key={mode} style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                            <div style={{ width: "14px", height: "14px", borderRadius: "50%", backgroundColor: color, flexShrink: 0 }} />
-                            <span>{mode}</span>
-                        </div>
-                    ))}
-            </div>
+          <div style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginBottom: "10px"
+          }}>
+            <img src={logo} alt="Logo" style={{ width: "36px", height: "36px", cursor: "pointer" }} onClick={() => navigate("/")} />
+            <button onClick={() => navigate("/map-view")} style={{
+              padding: "6px 12px",
+              backgroundColor: "#1e40af",
+              color: "#fff",
+              border: "none",
+              borderRadius: "5px",
+              cursor: "pointer",
+              fontSize: '0.8rem'
+            }}>
+              Map View
+            </button>
+          </div>
+          <h1 style={{ fontSize: "1.2rem", fontWeight: "600", margin: 0 }}>Select Route</h1>
         </div>
-    </div> // End Root Div
+
+        {/* Panel Content */}
+        <div style={{
+          padding: "14px",
+          overflowY: 'auto',
+          flexGrow: 1
+        }}>
+          <div style={{
+            marginBottom: '12px',
+            padding: '10px',
+            backgroundColor: 'rgba(255, 255, 255, 0.1)',
+            borderRadius: '5px',
+            fontSize: '0.85rem',
+            textAlign: 'center'
+          }}>
+            {instructionText}
+          </div>
+
+          <div style={{
+            fontSize: '0.75rem',
+            marginBottom: '12px',
+            color: '#d1d5db',
+            padding: '8px',
+            backgroundColor: 'rgba(255,255,255,0.05)',
+            borderRadius: '5px'
+          }}>
+            <div><strong>Origin:</strong> {originCoords ? `${originCoords.lat.toFixed(5)}, ${originCoords.lng.toFixed(5)}` : 'Not selected'}</div>
+            <div><strong>Destination:</strong> {destinationCoords ? `${destinationCoords.lat.toFixed(5)}, ${destinationCoords.lng.toFixed(5)}` : 'Not selected'}</div>
+          </div>
+
+          {errorMsg && (
+            <div style={{
+              marginBottom: '12px',
+              padding: '10px',
+              backgroundColor: 'rgba(255, 0, 0, 0.3)',
+              borderRadius: '5px',
+              fontSize: '0.85rem',
+              color: '#fca5a5',
+              textAlign: 'center'
+            }}>
+              {errorMsg}
+            </div>
+          )}
+
+          <button
+            onClick={handleRouteSuggestion}
+            disabled={isLoading || selectionMode !== 'done'}
+            style={{
+              width: "100%",
+              height: "42px",
+              backgroundColor: (selectionMode === 'done' && !isLoading) ? "#1e40af" : '#4b5563',
+              color: "#fff",
+              border: "none",
+              borderRadius: "5px",
+              cursor: (selectionMode === 'done' && !isLoading) ? "pointer" : 'not-allowed',
+              fontSize: "0.95rem",
+              fontWeight: '600',
+              opacity: (selectionMode === 'done' && !isLoading) ? 1 : 0.6,
+              transition: 'background-color 0.2s ease, opacity 0.2s ease',
+              marginBottom: '8px'
+            }}
+          >
+            {isLoading ? "Calculating..." : "Suggest Routes"}
+          </button>
+        </div>
+      </div>
+
+      {/* Legend */}
+      <div style={{
+        position: "absolute",
+        top: "-5px",
+        right: isMobile? "16px":"50px",
+        backgroundColor: "rgba(0, 0, 0, 0.8)",
+        color: "white",
+        padding: "10px 12px",
+        borderRadius: "5px",
+        zIndex: 10,
+        boxShadow: "0 2px 4px rgba(0, 0, 0, 0.4)",
+        fontSize: '0.8rem'
+      }}>
+        <h4 style={{ marginBottom: "8px", fontWeight: "bold", textAlign: "center", marginTop: 0, fontSize: '0.9rem' }}>Legend</h4>
+        <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+          {Object.entries(modeColors)
+            .filter(([mode]) => mode !== 'Walk' && mode !== 'Driving' && !mode.includes('-Stop'))
+            .map(([mode, color]) => (
+              <div key={mode} style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <div style={{
+                  width: "14px", height: "14px", borderRadius: "50%",
+                  backgroundColor: color, flexShrink: 0
+                }} />
+                <span>{mode}</span>
+              </div>
+            ))}
+        </div>
+      </div>
+    </div>
   );
 };
 

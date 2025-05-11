@@ -36,6 +36,9 @@ const MapView = () => {
   const [selectedRoute, setSelectedRoute] = useState(null);
   const [markerCenter, setMarkerCenter] = useState(INITIAL_MAP_CENTER);
   const navigate = useNavigate();
+  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+  const [showFilters, setShowFilters] = useState(!isMobile);
+  const [filtersVisible, setFiltersVisible] = useState(true);
   const [vehicleFilters, setVehicleFilters] = useState({
     MRT: true, LRT1: true, LRT2: true, Jeep: true, "P2P-Bus": true, Bus: true,
   });
@@ -74,13 +77,28 @@ const MapView = () => {
 
   // --- Memoized Map Update Helpers ---
   const calculateShiftedCenter = useCallback((mapCenter) => {
-      if (!mapRef.current) return null;
-      try {
-        const centerScreenPoint = mapRef.current.project(mapCenter);
-        centerScreenPoint.x += 150; // Adjust if sidebar width changes
-        return mapRef.current.unproject(centerScreenPoint);
-      } catch (e) { console.error("Error calculating shifted center:", e); return null; }
-  }, []);
+  if (!mapRef.current) return null;
+  try {
+    const mapContainer = mapRef.current.getContainer();
+    const centerScreenPoint = mapRef.current.project(mapCenter);
+
+    const isMobileView = window.innerWidth <= 768;
+
+    if (isMobileView) {
+      // Mobile layout: center horizontally, 30vh from top
+      centerScreenPoint.x = mapContainer.clientWidth / 2;
+      centerScreenPoint.y = mapContainer.clientHeight * 0.3;
+    } else {
+      // Desktop layout: center vertically, 150px right of center
+      centerScreenPoint.x += 150;
+    }
+
+    return mapRef.current.unproject(centerScreenPoint);
+  } catch (e) {
+    console.error("Error calculating shifted center:", e);
+    return null;
+  }
+}, []);
 
   const calculatePointToLineDistance = useCallback((coordinates, center) => {
     if (!Array.isArray(coordinates) || coordinates.length < 2 || !center) return Infinity;
@@ -328,52 +346,73 @@ const MapView = () => {
 
   // --- Event Handlers ---
   const handleRouteSelection = (route) => {
-    if (!mapRef.current || !route?.geometry) return;
+  if (!mapRef.current || !route?.geometry) return;
 
-    if (selectedRoute === route) {
-      setSelectedRoute(null);
-      // Reset map view when deselecting
-      mapRef.current.flyTo({ center: [markerCenter.lng, markerCenter.lat], zoom: INITIAL_MAP_ZOOM });
-    } else {
-      setSelectedRoute(route);
-      // Zoom to selected route
-      try {
-          if (route.geometry.type !== 'LineString' || !Array.isArray(route.geometry.coordinates) || route.geometry.coordinates.length < 2) { throw new Error("Invalid LineString"); }
-          const bounds = turf.bbox(route.geometry);
-          if (Array.isArray(bounds) && bounds.length === 4 && bounds.every(n => typeof n === 'number' && !isNaN(n))) {
-              mapRef.current.fitBounds(bounds, { padding: { top: 40, bottom: 40, left: 340, right: 40 }, maxZoom: 15, duration: 1000 });
-          } else {
-              console.warn("Invalid bounds:", bounds);
-              const coordinates = route.geometry.coordinates;
-              const routeCenter = coordinates[Math.floor(coordinates.length / 2)];
-              if (Array.isArray(routeCenter) && routeCenter.length >= 2) { mapRef.current.flyTo({ center: [routeCenter[0], routeCenter[1]], zoom: 12, essential: true }); }
-          }
-      } catch (e) {
-          console.error("Error fitting bounds:", e);
-           const coordinates = route.geometry.coordinates;
-           if (Array.isArray(coordinates) && coordinates.length > 0) {
-               const routeCenter = coordinates[Math.floor(coordinates.length / 2)];
-               if (Array.isArray(routeCenter) && routeCenter.length >= 2) { mapRef.current.flyTo({ center: [routeCenter[0], routeCenter[1]], zoom: 12, essential: true }); }
-           }
+  if (selectedRoute === route) {
+    setSelectedRoute(null);
+    mapRef.current.flyTo({
+      center: [markerCenter.lng, markerCenter.lat],
+      zoom: INITIAL_MAP_ZOOM
+    });
+  } else {
+    setSelectedRoute(route);
+
+    try {
+      const geometry = route.geometry;
+      if (geometry.type !== 'LineString' || !Array.isArray(geometry.coordinates) || geometry.coordinates.length < 2) {
+        throw new Error("Invalid LineString");
+      }
+
+      const bounds = turf.bbox(geometry);
+      if (Array.isArray(bounds) && bounds.length === 4 && bounds.every(n => typeof n === 'number' && !isNaN(n))) {
+        mapRef.current.fitBounds(bounds, {
+          padding: isMobile
+            ? { top: 100, bottom: 200, left: 30, right: 30 } // more top padding for 60vh space
+            : { top: 40, bottom: 40, left: 340, right: 40 },
+          maxZoom: 15,
+          duration: 1000,
+        });
+      } else {
+        console.warn("Invalid bounds:", bounds);
+        const coordinates = geometry.coordinates;
+        const routeCenter = coordinates[Math.floor(coordinates.length / 2)];
+        if (Array.isArray(routeCenter) && routeCenter.length >= 2) {
+          mapRef.current.flyTo({
+            center: [routeCenter[0], routeCenter[1]],
+            zoom: isMobile ? 13.5 : 12,
+            essential: true
+          });
+        }
+      }
+    } catch (e) {
+      console.error("Error fitting bounds:", e);
+      const coordinates = route.geometry.coordinates;
+      if (Array.isArray(coordinates) && coordinates.length > 0) {
+        const routeCenter = coordinates[Math.floor(coordinates.length / 2)];
+        if (Array.isArray(routeCenter) && routeCenter.length >= 2) {
+          mapRef.current.flyTo({
+            center: [routeCenter[0], routeCenter[1]],
+            zoom: isMobile ? 13.5 : 12,
+            essential: true
+          });
+        }
       }
     }
-  };
+  }
+};
 
-  // Resets the selected route AND map view
-  const handleResetSelection = () => {
-    setSelectedRoute(null);
-    if(mapRef.current) {
-        mapRef.current.flyTo({
-            center: [INITIAL_MAP_CENTER.lng, INITIAL_MAP_CENTER.lat],
-            zoom: INITIAL_MAP_ZOOM,
-            duration: 1000
-        });
-        // Also reset markerCenter to initial so nearest routes update from the default view
-        setMarkerCenter(INITIAL_MAP_CENTER);
-        // Explicitly update nearest routes based on this reset view
-        updateNearestRoutes(INITIAL_MAP_CENTER);
-    }
-  };
+const handleResetSelection = () => {
+  setSelectedRoute(null);
+  if (mapRef.current) {
+    mapRef.current.flyTo({
+      center: [INITIAL_MAP_CENTER.lng, INITIAL_MAP_CENTER.lat],
+      zoom: INITIAL_MAP_ZOOM,
+      duration: 1000,
+    });
+    setMarkerCenter(INITIAL_MAP_CENTER);
+    updateNearestRoutes(INITIAL_MAP_CENTER);
+  }
+};
 
   // Handles checkbox changes for vehicle filters
   const handleFilterChange = (type) => {
@@ -391,117 +430,265 @@ const MapView = () => {
   };
 
   // --- JSX Return ---
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth <= 768);
+    };
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+  
   return (
-    <div style={{ position: "relative", height: "100vh", fontFamily: "Montserrat, sans-serif" }}>
-      {/* Sidebar */}
-      <div style={{
-          position: "absolute", top: 0, left: 0, height: "100%", width: "300px",
-          backgroundColor: "rgba(0, 0, 0, 0.8)", color: "white",
-          zIndex: 10, display: 'flex', flexDirection: 'column', boxShadow: '2px 0 5px rgba(0,0,0,0.3)'
-      }}>
-          {/* Top Section (Non-scrolling) */}
-          <div style={{padding: "16px", flexShrink: 0}}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
-                  <img src={logo} alt="Logo" style={{ width: "40px", height: "40px", cursor: "pointer" }} onClick={() => navigate("/")}/>
-                  <button onClick={() => navigate("/nav-view")} style={{ padding: "8px 14px", backgroundColor: "#1e40af", color: "#fff", border: "none", borderRadius: "5px", cursor: "pointer", fontSize: '0.9rem' }}>
-                      Nav View
-                  </button>
-              </div>
-              <h3 style={{ marginBottom: "8px", fontSize: "1.0rem", fontWeight: "600" }}>Filter by Vehicle Type</h3>
-              {/* Filter Checkboxes */}
-              <div style={{
-                  display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0px 8px",
-                  marginBottom: "10px", fontSize: '0.9rem'
-              }}>
-                  {Object.keys(vehicleFilters).map((type) => (
-                      <label key={type} style={{ marginBottom: "2px", cursor: 'pointer', whiteSpace: 'nowrap' }}>
-                          <input type="checkbox" checked={vehicleFilters[type]} onChange={() => handleFilterChange(type)} style={{ marginRight: "8px", cursor: 'pointer', verticalAlign: 'middle' }}/>
-                          <span style={{verticalAlign: 'middle'}}>{type}</span>
-                      </label>
-                  ))}
-              </div>
-              <h2 style={{ marginTop: "16px", marginBottom: "10px", fontSize: "1.15rem", fontWeight: "600" }}>Nearest Routes</h2>
-          </div>
+  <div style={{ position: "relative", height: "100vh", fontFamily: "Montserrat, sans-serif" }}>
+    
+    {/* Sidebar */}
+    <div style={{
+      position: "absolute",
+      bottom: isMobile ? 0 : undefined,
+      left: isMobile ? 0 : 0,
+      top: isMobile ? undefined : 0,
+      height: isMobile ? "40vh" : "100%",
+      width: isMobile ? "100%" : "300px",
+      backgroundColor: "rgba(0, 0, 0, 0.8)",
+      color: "white",
+      zIndex: 10,
+      display: 'flex',
+      flexDirection: 'column',
+      boxShadow: isMobile ? '0 -2px 5px rgba(0,0,0,0.3)' : '2px 0 5px rgba(0,0,0,0.3)'
+    }}>
+      
+      {/* Top Section */}
+      <div style={{ padding: isMobile ? "8px 12px" : "16px", flexShrink: 0 }}>
+        <div style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: isMobile ? "8px" : "16px"
+        }}>
+          <img
+            src={logo}
+            alt="Logo"
+            style={{ width: "40px", height: "40px", cursor: "pointer" }}
+            onClick={() => navigate("/")}
+          />
+          <button onClick={() => navigate("/nav-view")} style={{
+            padding: isMobile ? "6px 10px" : "8px 14px",
+            backgroundColor: "#1e40af",
+            color: "#fff",
+            border: "none",
+            borderRadius: "5px",
+            cursor: "pointer",
+            fontSize: '0.85rem'
+          }}>
+            Nav View
+          </button>
+        </div>
 
-          {/* Scrollable List */}
-          <div style={{flexGrow: 1, overflowY: 'auto', padding: '0 16px' }}>
-              <ul style={{ paddingLeft: "0", listStyle: "none", margin: 0 }}>
-                  {nearestRoutes.length > 0 ? nearestRoutes.map((route, index) => {
-                       const routeName = route?.properties?.name || `Route ${index + 1}`;
-                       const routeType = route?.properties?.type || '';
-                       return (
-                           <li
-                               key={routeName + index}
-                               onClick={() => handleRouteSelection(route)}
-                               style={{
-                                   cursor: "pointer", marginBottom: "8px",
-                                   backgroundColor: getRouteColor(routeType),
-                                   color: "#111",
-                                   padding: "10px 14px", borderRadius: "5px", fontWeight: "600",
-                                   border: selectedRoute === route ? "3px solid #fff" : "3px solid transparent",
-                                   transition: 'background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease',
-                                   boxShadow: selectedRoute === route ? '0 0 8px rgba(255, 255, 255, 0.7)' : 'none'
-                               }}
-                           >
-                               <div style={{ fontSize: "1rem", marginBottom: '3px' }}>{routeName}</div>
-                               <div style={{ fontSize: "1rem", fontWeight: "600", display: "flex", alignItems: "center", gap: "10px", marginTop: "4px", color: '#333' }}>
-                                   <span>{formatDistance(route.distance)}</span>
-                                   <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-                                       <span className="material-icons" style={{ fontSize: "16px" }}>directions_walk</span>
-                                       {formatWalkingTime(route.distance)}
-                                   </span>
-                               </div>
-                           </li>
-                       );
-                   }) : <li style={{color: '#aaa', padding: '10px 0'}}>No routes found nearby or matching filters.</li>}
-              </ul>
-          </div>
+        {(!isMobile || showFilters) && (
+          <>
+            <h3 style={{
+              marginBottom: "8px",
+              fontSize: "0.95rem",
+              fontWeight: "600"
+            }}>
+              Filter by Vehicle Type
+            </h3>
+            <div style={{
+              display: "grid",
+              gridTemplateColumns: isMobile ? "1fr 1fr 1fr" : "1fr 1fr",
+              gap: "4px 8px",
+              marginBottom: isMobile ? "6px" : "10px",
+              fontSize: '0.85rem'
+            }}>
+              {Object.keys(vehicleFilters).map((type) => (
+                <label
+                  key={type}
+                  style={{ marginBottom: "2px", cursor: 'pointer', whiteSpace: 'nowrap' }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={vehicleFilters[type]}
+                    onChange={() => handleFilterChange(type)}
+                    style={{
+                      marginRight: "6px",
+                      cursor: 'pointer',
+                      verticalAlign: 'middle'
+                    }}
+                  />
+                  <span style={{ verticalAlign: 'middle' }}>{type}</span>
+                </label>
+              ))}
+            </div>
+          </>
+        )}
 
-          {/* Bottom Button */}
-          <div style={{padding: "16px", flexShrink: 0}}>
-              <button onClick={handleResetSelection} disabled={!selectedRoute} style={{
-                  padding: "10px 16px", width: '100%',
-                  backgroundColor: selectedRoute ? "#dc2626" : '#6b7280',
-                  color: "white", border: "none", borderRadius: "5px", cursor: selectedRoute ? "pointer" : 'not-allowed',
-                  fontWeight: "bold", fontFamily: "Montserrat", opacity: selectedRoute ? 1 : 0.6, fontSize: '0.9rem'
-              }}>
-                  Reset Selection
-              </button>
-          </div>
+        <h2 style={{
+          marginTop: isMobile ? "8px" : "16px",
+          marginBottom: isMobile ? "6px" : "10px",
+          fontSize: "1.05rem",
+          fontWeight: "600"
+        }}>
+          Nearest Routes
+        </h2>
       </div>
 
-      {/* Legend */}
+      {/* Scrollable Routes List */}
       <div style={{
-          position: "absolute", top: "-5px", right: "50px", backgroundColor: "rgba(0, 0, 0, 0.8)",
-          color: "white", padding: "10px 12px", borderRadius: "5px", zIndex: 10, boxShadow: "0 2px 4px rgba(0, 0, 0, 0.4)", fontSize: '0.8rem'
+        flexGrow: 1,
+        overflowY: 'auto',
+        padding: isMobile ? '0 12px' : '0 16px'
       }}>
-          <h4 style={{ marginBottom: "8px", fontWeight: "bold", textAlign: "center", marginTop: 0, fontSize: '0.9rem' }}>Legend</h4>
-          <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-              {Object.entries(modeColors)
-                  .filter(([mode]) => mode !== 'Walk' && mode !== 'Driving' && !mode.includes('-Stop'))
-                  .map(([mode, color]) => (
-                      <div key={mode} style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                          <div style={{ width: "14px", height: "14px", borderRadius: "50%", backgroundColor: color, flexShrink: 0 }} />
-                          <span>{mode}</span>
-                      </div>
-                  ))}
-          </div>
+        <ul style={{ paddingLeft: "0", listStyle: "none", margin: 0 }}>
+          {nearestRoutes.length > 0 ? nearestRoutes.map((route, index) => {
+            const routeName = route?.properties?.name || `Route ${index + 1}`;
+            const routeType = route?.properties?.type || '';
+            return (
+              <li
+                key={routeName + index}
+                onClick={() => handleRouteSelection(route)}
+                style={{
+                  cursor: "pointer",
+                  marginBottom: "6px",
+                  backgroundColor: getRouteColor(routeType),
+                  color: "#111",
+                  padding: "10px 12px",
+                  borderRadius: "5px",
+                  fontWeight: "600",
+                  border: selectedRoute === route ? "3px solid #fff" : "3px solid transparent",
+                  transition: 'all 0.2s ease',
+                  boxShadow: selectedRoute === route ? '0 0 8px rgba(255, 255, 255, 0.7)' : 'none'
+                }}
+              >
+                <div style={{ fontSize: "0.95rem", marginBottom: '2px' }}>{routeName}</div>
+                <div style={{
+                  fontSize: "0.9rem",
+                  fontWeight: "600",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "10px",
+                  color: '#333'
+                }}>
+                  <span>{formatDistance(route.distance)}</span>
+                  <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                    <span className="material-icons" style={{ fontSize: "16px" }}>directions_walk</span>
+                    {formatWalkingTime(route.distance)}
+                  </span>
+                </div>
+              </li>
+            );
+          }) : (
+            <li style={{ color: '#aaa', padding: '10px 0' }}>
+              No routes found nearby or matching filters.
+            </li>
+          )}
+        </ul>
       </div>
 
-      {/* Map container */}
-      <div ref={mapContainerRef} style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", zIndex: 1 }} />
-
-      {/* Marker overlay */}
+      {/* Bottom Reset + Filter Toggle Buttons */}
       <div style={{
-          position: "absolute", top: "50%", left: "calc(50% + 150px)",
-          width: "24px", height: "24px", backgroundColor: "rgba(255, 0, 0, 0.8)",
-          border: '2px solid white', borderRadius: "50% 50% 50% 0",
-          transform: "translate(-50%, -100%) rotate(-45deg)",
-          transformOrigin: "center bottom",
-          zIndex: 20, boxShadow: "0 0 8px rgba(0,0,0,0.6)",
-          pointerEvents: 'none'
-      }}/>
+        padding: isMobile ? "8px 12px" : "16px",
+        display: "flex",
+        alignItems: "center",
+        gap: "8px",
+        flexShrink: 0
+      }}>
+        <button
+          onClick={handleResetSelection}
+          disabled={!selectedRoute}
+          style={{
+            flex: 1,
+            padding: "10px 12px",
+            backgroundColor: selectedRoute ? "#dc2626" : "#6b7280",
+            color: "white",
+            border: "none",
+            borderRadius: "5px",
+            cursor: selectedRoute ? "pointer" : "not-allowed",
+            fontWeight: "bold",
+            fontFamily: "Montserrat",
+            fontSize: "0.9rem",
+            opacity: selectedRoute ? 1 : 0.6
+          }}
+        >
+          Reset Selection
+        </button>
+
+        {isMobile && (
+          <button
+            onClick={() => setShowFilters(prev => !prev)}
+            style={{
+              padding: "10px 12px",
+              backgroundColor: "#374151",
+              color: "#fff",
+              border: "none",
+              borderRadius: "5px",
+              cursor: "pointer",
+              fontSize: "0.85rem",
+              fontFamily: "Montserrat",
+              whiteSpace: "nowrap"
+            }}
+          >
+            {showFilters ? "Hide Filter" : "Show Filter"}
+          </button>
+        )}
+      </div>
     </div>
+
+    {/* Marker */}
+    <div style={{
+      position: "absolute",
+      top: isMobile ? "30vh" : "50%",
+      left: isMobile ? "50%" : "calc(50% + 150px)",
+      width: "24px",
+      height: "24px",
+      backgroundColor: "rgba(255, 0, 0, 0.8)",
+      border: "2px solid white",
+      borderRadius: "50% 50% 50% 0",
+      transform: "translate(-50%, -100%) rotate(-45deg)",
+      transformOrigin: "center bottom",
+      zIndex: 20,
+      boxShadow: "0 0 8px rgba(0,0,0,0.6)",
+      pointerEvents: "none"
+    }}/>
+
+    {/* Legend */}
+    <div style={{
+      position: "absolute",
+      top: "-5px",
+      right: isMobile? "16px":"50px",
+      backgroundColor: "rgba(0, 0, 0, 0.8)",
+      color: "white",
+      padding: "10px 12px",
+      borderRadius: "5px",
+      zIndex: 10,
+      boxShadow: "0 2px 4px rgba(0, 0, 0, 0.4)",
+      fontSize: '0.8rem'
+    }}>
+      <h4 style={{ marginBottom: "8px", fontWeight: "bold", textAlign: "center", marginTop: 0, fontSize: '0.9rem' }}>Legend</h4>
+      <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+        {Object.entries(modeColors)
+          .filter(([mode]) => mode !== 'Walk' && mode !== 'Driving' && !mode.includes('-Stop'))
+          .map(([mode, color]) => (
+            <div key={mode} style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <div style={{
+                width: "14px", height: "14px", borderRadius: "50%",
+                backgroundColor: color, flexShrink: 0
+              }} />
+              <span>{mode}</span>
+            </div>
+          ))}
+      </div>
+    </div>
+
+    {/* Map container */}
+    <div ref={mapContainerRef} style={{
+      position: "absolute",
+      top: 0,
+      left: 0,
+      width: "100%",
+      height: "100%",
+      zIndex: 1
+    }}/>
+  </div>
   );
 };
 
