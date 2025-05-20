@@ -1,40 +1,31 @@
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
-import { awsConfig } from "../config/config"; // Ensure path is correct
-import transitRoute from "../data/transit-lines.json"; // Ensure path is correct
+import { awsConfig } from "../config/config";
+import transitRoute from "../data/transit-lines.json";
 import { useNavigate } from "react-router-dom";
 import AWS from 'aws-sdk';
-import logo from "../assets/logo.png"; // Ensure path is correct
-import { buildSnappedRouteData } from "../components/routeUtils"; // Ensure path is correct
+import logo from "../assets/logo.png";
+import { buildSnappedRouteData } from "../components/routeUtils";
 
 // Define mode colors for map layers
 const modeColors = {
-    MRT: "#facc15", // Yellow-400
-    LRT1: "#22c55e", // Green-500
-    LRT2: "#7A07D1", // Purple
-    Jeep: "#FFA500", // Orange
-    "P2P-Bus": "#f97316", // Orange-500
-    Bus: "#3b82f6", // Blue-500
-    // Colors for stops if needed, can be same as line
+    MRT: "#facc15",
+    LRT1: "#22c55e",
+    LRT2: "#7A07D1",
+    Jeep: "#FFA500",
+    "P2P-Bus": "#f97316",
+    Bus: "#3b82f6",
     "MRT-Stop": "#facc15",
     "LRT1-Stop": "#22c55e",
     "LRT2-Stop": "#7A07D1",
     "Bus-Stop": "#3b82f6",
     "P2P-Bus-Stop": "#f97316",
-    // Walk/Driving colors not needed for layers here
 };
 
-
-// Define coordinates for hardcoded route button
-// Should be close to HARDCODED_ORIGIN_ALABANG and HARDCODED_DEST_BUENDIA in routeUtils.js
-const HARDCODED_BUTTON_ORIGIN = { lat: 14.476, lng: 121.039 }; // Approx ATC Alabang
-const HARDCODED_BUTTON_DEST = { lat: 14.557, lng: 121.007 }; // Approx Buendia/LRT
-
 // Define initial map center state
-const INITIAL_MAP_CENTER = { lng: 121.05, lat: 14.55 }; // Centered more on Metro Manila
+const INITIAL_MAP_CENTER = { lng: 121.05, lat: 14.55 };
 const INITIAL_MAP_ZOOM = 11;
-
 
 const NavView = () => {
   // --- State Variables ---
@@ -47,7 +38,6 @@ const NavView = () => {
   const [destinationCoords, setDestinationCoords] = useState(null);
   const [selectionMode, setSelectionMode] = useState('origin');
   const [processedRoutes, setProcessedRoutes] = useState(null);
-  const [displayRouteStrings, setDisplayRouteStrings] = useState([]);
   const [selectedRouteIndex, setSelectedRouteIndex] = useState(null);
   const [awsRouteData, setAwsRouteData] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -92,20 +82,20 @@ const NavView = () => {
     console.log(`Map clicked at: ${coords.lat}, ${coords.lng}`);
     if (isLoading) return;
 
-    if (selectionMode === 'origin' || selectionMode === 'done') { // Allow restarting by clicking origin
+    if (selectionMode === 'origin' || selectionMode === 'done') {
         setOriginCoords(coords); updateMarker(coords, 'origin');
         setDestinationCoords(null); destinationMarkerRef.current?.remove();
         setSelectionMode('destination'); setInstructionText('Click on the map to select Destination');
-        setProcessedRoutes(null); setDisplayRouteStrings([]); setSelectedRouteIndex(null); setAwsRouteData(null); setErrorMsg("");
+        setProcessedRoutes(null); setSelectedRouteIndex(null); setAwsRouteData(null); setErrorMsg("");
     } else if (selectionMode === 'destination') {
         if (originCoords && coords.lng === originCoords.lng && coords.lat === originCoords.lat) {
-             setErrorMsg("Origin and Destination cannot be the same point."); return;
+            setErrorMsg("Origin and Destination cannot be the same point."); return;
         }
         setDestinationCoords(coords); updateMarker(coords, 'destination');
         setSelectionMode('done'); setInstructionText('Origin & Destination selected. Click "Suggest Routes".'); setErrorMsg("");
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isLoading, selectionMode, originCoords]); // Removed updateMarker from deps
+  }, [isLoading, selectionMode, originCoords]);
 
   // --- Function to Add Transit Layers ---
   const addAllLayers = (map) => {
@@ -137,7 +127,7 @@ const NavView = () => {
         const layoutProps = layer.type === 'line' ? { "line-join": "round", "line-cap": "round" } : {};
         safeAddLayer({
             ...layer,
-            source: "transit-route", // Use the common source
+            source: "transit-route",
             layout: layoutProps,
         });
     });
@@ -151,9 +141,9 @@ const NavView = () => {
     const map = new maplibregl.Map({
         container: mapContainerRef.current,
         style: `https://maps.geo.${awsConfig.region}.amazonaws.com/maps/v0/maps/${awsConfig.mapName}/style-descriptor?key=${awsConfig.apiKey}`,
-        center: [INITIAL_MAP_CENTER.lng, INITIAL_MAP_CENTER.lat], // Use constant
-        zoom: INITIAL_MAP_ZOOM, // Use constant
-     });
+        center: [INITIAL_MAP_CENTER.lng, INITIAL_MAP_CENTER.lat],
+        zoom: INITIAL_MAP_ZOOM,
+      });
     mapRef.current = map;
 
     map.on("load", () => {
@@ -161,10 +151,10 @@ const NavView = () => {
         console.log("Map loaded.");
         // --- ADD SOURCE AND LAYERS ---
         if (!mapRef.current.getSource("transit-route")) {
-            mapRef.current.addSource("transit-route", { type: "geojson", data: transitRoute }); // Load full data
+            mapRef.current.addSource("transit-route", { type: "geojson", data: transitRoute });
             console.log("Source 'transit-route' added.");
         }
-        addAllLayers(map); // Add the layers
+        addAllLayers(map);
         // -----------------------------
         map.on('click', handleMapClick);
     });
@@ -179,21 +169,21 @@ const NavView = () => {
         }
         originMarkerRef.current?.remove();
         destinationMarkerRef.current?.remove();
-     };
+      };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [awsReady, handleMapClick]); // Dependencies
+  }, [awsReady, handleMapClick]);
 
 
   // --- Route Calculation Logic ---
 
   // *** Calculation function that accepts coords (now async) ***
-  const handleRouteSuggestionForCoords = useCallback(async (oCoords, dCoords) => { // Added async
+  const handleRouteSuggestionForCoords = useCallback(async (oCoords, dCoords) => {
       setErrorMsg("");
       if (!oCoords || !dCoords) { setErrorMsg("Internal error: Missing coordinates for calculation."); return; }
       if (!awsReady || !AWS.config.credentials?.accessKeyId) { setErrorMsg("AWS services not ready."); return; }
 
-      setIsLoading(true); setAwsRouteData(null); setProcessedRoutes(null); setDisplayRouteStrings([]); setSelectedRouteIndex(null);
-      setInstructionText('Calculating driving route...'); // Update instruction
+      setIsLoading(true); setAwsRouteData(null); setProcessedRoutes(null); setSelectedRouteIndex(null);
+      setInstructionText('Calculating driving route...');
 
       try {
           const routeCalculator = new AWS.Location();
@@ -207,8 +197,8 @@ const NavView = () => {
           const data = await routeCalculator.calculateRoute(params).promise();
           console.log("AWS Route Data Received:", data);
           // Update state ONLY IF component is still mounted (check less critical here as it triggers another effect)
-          setAwsRouteData(data); // Trigger processing effect
-          setInstructionText('Calculating transit options...'); // Update instruction
+          setAwsRouteData(data);
+          setInstructionText('Calculating transit options...');
       } catch (error) {
           console.error("Error calculating AWS route:", error);
           setErrorMsg(`Error calculating route: ${error.message || 'Please try again.'}`);
@@ -216,30 +206,14 @@ const NavView = () => {
           setInstructionText('Calculation failed. Click map to select new Origin.');
       }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [awsReady]); // Dependencies
+  }, [awsReady]);
 
   // Function to Handle Route Calculation Request (Main button)
-  const handleRouteSuggestion = () => { // No longer async itself
+  const handleRouteSuggestion = () => {
     if (!originCoords || !destinationCoords) { setErrorMsg("Please select both Origin and Destination on the map."); return; }
     // Call the async helper
     handleRouteSuggestionForCoords(originCoords, destinationCoords);
   };
-
-  // Handler for Hardcoded Route Button
-  const handleHardcodedRoute = () => {
-      console.log("Triggering hardcoded Alabang -> Buendia route...");
-      setErrorMsg("");
-      const origin = HARDCODED_BUTTON_ORIGIN;
-      const destination = HARDCODED_BUTTON_DEST;
-      setOriginCoords(origin); // Update state
-      setDestinationCoords(destination); // Update state
-      updateMarker(origin, 'origin'); // Update map marker
-      updateMarker(destination, 'destination'); // Update map marker
-      setSelectionMode('done'); // Ensure mode is correct
-      // Call the async helper
-      handleRouteSuggestionForCoords(origin, destination);
-  }
-
 
   // *** Effect to Process AWS Data and Calculate Snapped Routes (NOW ASYNC) ***
   useEffect(() => {
@@ -249,7 +223,7 @@ const NavView = () => {
         console.log("Processing AWS data and snapping routes...");
         // Ensure loading is true while snapping
         if (!isLoading) setIsLoading(true);
-         setInstructionText('Analyzing transit options...');
+        setInstructionText('Analyzing transit options...');
         try {
           // *** Await the result of buildSnappedRouteData ***
           const snapped = await buildSnappedRouteData(awsRouteData, transitRoute.features);
@@ -258,9 +232,7 @@ const NavView = () => {
           // Check if component is still mounted before setting state
           if (!snapped || snapped.length === 0) { throw new Error("Snapping process returned no valid routes."); }
 
-          setProcessedRoutes(snapped); // Store structured data
-          const displayStrings = snapped.map((route, index) => route?.properties?.label || `Route ${index + 1}`);
-          setDisplayRouteStrings(displayStrings);
+          setProcessedRoutes(snapped);
           let defaultIndex = 0;
           const firstTransitIndex = snapped.findIndex(route => route?.properties?.primary_mode !== 'Driving');
           if (firstTransitIndex !== -1) { defaultIndex = firstTransitIndex; }
@@ -268,19 +240,19 @@ const NavView = () => {
           setInstructionText('Calculation complete. Click map to select new Origin.');
 
         } catch (error) {
-           console.error("Error processing/snapping route data:", error);
-           setErrorMsg(`Error processing route: ${error.message || 'Failed.'}`);
-           setProcessedRoutes(null); setDisplayRouteStrings([]); setSelectedRouteIndex(null);
-           setInstructionText('Processing failed. Click map to select new Origin.');
+            console.error("Error processing/snapping route data:", error);
+            setErrorMsg(`Error processing route: ${error.message || 'Failed.'}`);
+            setProcessedRoutes(null); setSelectedRouteIndex(null);
+            setInstructionText('Processing failed. Click map to select new Origin.');
         } finally {
-           // Check mount status before setting state
-           setIsLoading(false);
+            // Check mount status before setting state
+            setIsLoading(false);
         }
-      } else if (awsRouteData) { // AWS call finished but no legs
-         console.warn("AWS route data received but contains no Legs.");
-         setErrorMsg("Route calculation returned no path.");
-         setIsLoading(false);
-         setInstructionText('Calculation failed (no path). Click map to select new Origin.');
+      } else if (awsRouteData) {
+          console.warn("AWS route data received but contains no Legs.");
+          setErrorMsg("Route calculation returned no path.");
+          setIsLoading(false);
+          setInstructionText('Calculation failed (no path). Click map to select new Origin.');
       }
     };
 
@@ -289,7 +261,7 @@ const NavView = () => {
         processAndSnapRoutes();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [awsRouteData]); // Dependency: Only run when awsRouteData changes
+  }, [awsRouteData, isLoading]);
 
 
   // Effect to Navigate WHEN processedRoutes is ready AND user hasn't re-clicked map
@@ -305,7 +277,7 @@ const NavView = () => {
         });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [processedRoutes, selectedRouteIndex, awsRouteData, selectionMode]);
+  }, [processedRoutes, selectedRouteIndex, awsRouteData, selectionMode, originCoords, destinationCoords, navigate]);
 
     const isMobile = window.innerWidth <= 640;
 
